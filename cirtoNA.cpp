@@ -1104,12 +1104,10 @@ vector<vector<VectorGeneric<3>>> cirtoNA::DTransformationDRot(vector<VectorGener
   return DtransformDrotation;
 }
 
-vector<vector<VectorGeneric<3>>> cirtoNA::DMidDRot(vector<VectorGeneric<3>>  midFrame, vector<VectorGeneric<3>> frame){
+vector<vector<VectorGeneric<3>>> cirtoNA::DMidDRot(vector<VectorGeneric<3>>  midFrame){
   vector<VectorGeneric<3>> Sx(3, Vector(0,0,0)), Sy(3, Vector(0,0,0)), Sz(3, Vector(0,0,0)), DmidDrotx(3, Vector(0,0,0)), DmidDroty(3, Vector(0,0,0)), DmidDrotz(3, Vector(0,0,0));
   vector<VectorGeneric<3>> dummy33(3, Vector(0,0,0)), SxM(3, Vector(0,0,0)), SyM(3, Vector(0,0,0)), SzM(3, Vector(0,0,0)), MtSxM(3, Vector(0,0,0)), MtSyM(3, Vector(0,0,0)), MtSzM(3, Vector(0,0,0));
   vector<vector<VectorGeneric<3>>> DmidDrotation(3, dummy33);
-  vector<VectorGeneric<3>> I = {Vector(1,0,0), Vector(0,1,0), Vector(0,0,1)};
-  VectorGeneric<3> phi;
 
   Sx = Skew(Vector(1, 0, 0));
   Sy = Skew(Vector(0, 1, 0));
@@ -1448,7 +1446,7 @@ void cirtoNA::calculate(){
             }
           }
 
-          DPairMidDRotation[pair][base] = DMidDRot(Pairframes[pair], Baseframes[2*pair+base]); // get the derivative of the midframe to baseframe rotations
+          DPairMidDRotation[pair][base] = DMidDRot(Pairframes[pair]); // get the derivative of the midframe to baseframe rotations
         }
       }
    
@@ -1460,45 +1458,26 @@ void cirtoNA::calculate(){
         stepTranslations[step] = 0.5*(BaseRefs[2*step+2]+BaseRefs[2*step+3] - BaseRefs[2*step]-BaseRefs[2*step+1]);
 
         //bookkeepderivatives
-        HalfRotationMatrix = AxisAngleToMatrix(0.5*RotationvectorStep[step]);
 
         DRotationVectorDStepTransformation[step] = DVectorDTransformation(RotationvectorStep[step], TransformationMatrixStep[step]);
-       
-        for(base=0;base<2;base++){
+        for(pair=0;pair<2;pair++){
+          for(base=0;base<2;base++){
 
-          for(x=0;x<3;x++){
+            DStepTransformationDRotation[step][pair][base]=0.5*DTransformationDRot(Pairframes[step], Pairframes[step+1], pow(-1.0,pair+1));
+
             for(i=0;i<3;i++){
-              for(j=0;j<3;j++){
+              for(x=0;x<3;x++){
                 for(k=0;k<3;k++){
-                  DStepTransformationDRotation[step][0][base][x][i][j] += Pairframes[step+1][k][j]*DPairMidDRotation[step][base][x][k][i];
-                  DStepTransformationDRotation[step][1][base][x][i][j] += DPairMidDRotation[step+1][base][x][k][j]*Pairframes[step][k][i];
+                  for(l=0;l<3;l++){
+                    DRotationVectorDStepRotation[step][pair][base][x][i] += DStepTransformationDRotation[step][pair][base][x][k][l]*DRotationVectorDStepTransformation[step][k][l][i];
+                  }
                 }
               }
             }
-          }
-
-          for(i=0;i<3;i++){
-            for(x=0;x<3;x++){
-              for(k=0;k<3;k++){
-                for(l=0;l<3;l++){
-                  DRotationVectorDStepRotation[step][0][base][x][i] += DStepTransformationDRotation[step][0][base][x][k][l]*DRotationVectorDStepTransformation[step][k][l][i];
-                  DRotationVectorDStepRotation[step][1][base][x][i] += DStepTransformationDRotation[step][1][base][x][k][l]*DRotationVectorDStepTransformation[step][k][l][i];
-                }
-              }
-            }
-          }
-
-          for(x=0;x<3;x++){
-            for(i=0;i<3;i++){
-              for(j=0;j<3;j++){
-                for(k=0;k<3;k++){
-                  DStepMidDRotation[step][1][base][x][i][j] += 0.5*HalfRotationMatrix[k][j]*DPairMidDRotation[step+1][base][x][i][k];
-                  DStepMidDRotation[step][0][base][x][i][j] += 0.5*HalfRotationMatrix[j][k]*DPairMidDRotation[step][base][x][i][k];
-                }
-              }
-            }
-          }
+            
+            DStepMidDRotation[step][pair][base] = 0.5*DMidDRot(Stepframes[step]);
         
+          }
         }
       }
 
@@ -1597,9 +1576,9 @@ void cirtoNA::calculate(){
             if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
 
               for(x=0;x<3;x++){
-                DtiltDatom += DtiltDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
-                DrollDatom += DrollDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
-                DtwistDatom += DtwistDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DtiltDatom -= DtiltDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DrollDatom -= DrollDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DtwistDatom -= DtwistDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
               }
               
               // now the derivatives of atom N can be outputted
