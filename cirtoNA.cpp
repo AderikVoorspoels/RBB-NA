@@ -93,7 +93,6 @@ private:
   VectorGeneric<3> RotationAxis(vector<VectorGeneric<3>> Q);
   double RotationAngle(vector<VectorGeneric<3>> Q);
   VectorGeneric<3> RotationVector(vector<VectorGeneric<3>> Q);
-  vector<VectorGeneric<3>> AxisAngleToMatrix(VectorGeneric<3> RotationVector);
 
   vector<VectorGeneric<3>> midFrame(vector<VectorGeneric<3>> frame1, VectorGeneric<3> RotationVector);
 
@@ -891,22 +890,6 @@ VectorGeneric<3> cirtoNA::RotationVector(vector<VectorGeneric<3>> Q){
   return theta*axis;
 }
 
-vector<VectorGeneric<3>> cirtoNA::AxisAngleToMatrix(VectorGeneric<3> RotationVector){
-  vector<VectorGeneric<3>> Q(3, Vector(0,0,0));
-  double theta = RotationVector.modulo();
-  VectorGeneric<3> axis = RotationVector/theta;
-  double cost=cos(theta);
-  double sint=sin(theta);
-
-  for(int i=0; i<3; i++){
-    Q[i][i] = cost + axis[i]*axis[i]*(1-cost);
-    Q[i][(i+1)%3] = axis[i]*axis[(i+1)%3]*(1-cost) + axis[(i+2)%3]*sint;
-    Q[i][(i+2)%3] = axis[i]*axis[(i+2)%3]*(1-cost) - axis[(i+1)%3]*sint;
-  }
-
- return Q;
-}
-
 vector<VectorGeneric<3>> cirtoNA::midFrame(vector<VectorGeneric<3>> frame1, VectorGeneric<3> RotationVector){
   vector<VectorGeneric<3>> mid(3, Vector(0,0,0));
   double theta = RotationVector.modulo();
@@ -1131,16 +1114,382 @@ vector<vector<VectorGeneric<3>>> cirtoNA::DMidDRot(vector<VectorGeneric<3>>  mid
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void cirtoNA::calculate(){
+
+
+ // pbc handling
+  if(pbc){makeWhole();}
+
+ // 
+
+ // initialize basic counter and numbers
   int i, j, l, k, n, N, M, x;
+  int npairs, nbases, nsteps, natoms;  // global numbers
+  int purineAtoms, pyrimidineAtoms; // number of atoms in base dependeing on type
+
+ // initialize dummys to set size of other varibles
+  VectorGeneric<3> Zero3 = Vector(0, 0, 0);
+  vector<double> Zero10(10, 0.0);
+  vector<VectorGeneric<3>> Zero2x3(2, Vector(0, 0, 0)), Zero3x3(3, Vector(0, 0, 0)), Zero10x3(10, Vector(0, 0, 0));
+  vector<vector<VectorGeneric<3>>> Zero2x2x3(2, Zero2x3), Zero3x3x3(3, Zero3x3), Zero2x3x3(2, Zero3x3);
+  vector<vector<vector<VectorGeneric<3>>>> Zero3x3x3x3(3, Zero3x3x3), Zero2x3x3x3(2, Zero3x3x3), Zero2x2x3x3(2, Zero2x3x3);
+  vector<vector<vector<vector<VectorGeneric<3>>>>> Zero2x2x3x3x3(2, Zero2x3x3x3);
+
+ //
+
+ // get size of chain for initialization
+  nbases = BASES.size();
+  npairs = nbases/2;
+  nsteps = npairs-1;
+ //
+
+
+ // check if Base completion is used or input is done giving the three relevent atoms alone
+  bool BASECOMPLETION = (FITTED or (cirtoNA::INPUTMODE==sequence));
+  if(BASECOMPLETION){
+    purineAtoms = 7;
+    pyrimidineAtoms = 10;
+  }else{
+    purineAtoms = 3;
+    pyrimidineAtoms = 3;
+  }
+ //
+
+ // initialize containers for information regarding the bases
+
+  VectorGeneric<3> glycosidic, internal;  // important intermediate variables to get to the base frames
+
+  vector<int> AtomsInBase(nbases, 0);
+  vector<vector<double>> AtomsMasses(nbases, Zero10);
+  vector<VectorGeneric<3>> BaseRefs(nbases, Vector(0, 0, 0));
+  vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), BaseRedefsBase(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
+
+ //
+
+ // collect the atoms and all needed info on them
+  N=0;
+  for(base=0;base<(nbases-1);base=base+2){ // for all pairs in the DNA chain check the first base, second base should be complementary
+    switch(BASES[base]){  //statements to load the required atoms depinding on the sequence provided
+
+      case('A'): {
+        AtomsInBase[base]=10;
+        AtomsBases[base].resize(10);
+        AtomsMasses[base].resize(10);
+
+        for (n = 0; n < 10; n++) {
+          AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
+          N++;
+        }
+
+        AtomsInBase[base+1]=7;
+        AtomsBases[base+1].resize(7);
+        AtomsMasses[base+1].resize(7);
+
+        for (n = 0; n < 7; n++) {
+          AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
+          N++;
+        }
+
+        break;
+      }
+
+      case('C'): {
+        AtomsInBase[base]=7;
+        AtomsBases[base].resize(7);
+        AtomsMasses[base].resize(7);
+
+        for (n = 0; n < 7; n++) {
+          AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
+          N++;
+        }
+
+        AtomsInBase[base+1]=10;
+        AtomsBases[base+1].resize(10);
+        AtomsMasses[base+1].resize(10);
+
+        for (n = 0; n < 10; n++) {
+          AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
+          N++;
+        }
+
+        break;
+      }
+
+      case('G'): {
+        AtomsInBase[base]=10;
+        AtomsBases[base].resize(10);
+        AtomsMasses[base].resize(10);
+
+        for (n = 0; n < 10; n++) {
+          AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
+          N++;
+        }
+
+        AtomsInBase[base+1]=7;
+        AtomsBases[base+1].resize(7);
+        AtomsMasses[base+1].resize(7);
+
+        for (n = 0; n < 7; n++) {
+          AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
+          N++;
+        }
+
+        break;
+      }
+
+      case('T'): {
+        AtomsInBase[base]=7;
+        AtomsBases[base].resize(7);
+        AtomsMasses[base].resize(7);
+
+        for (n = 0; n < 7; n++) {
+          AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
+          N++;
+        }
+
+        AtomsInBase[base+1]=10;
+        AtomsBases[base+1].resize(10);
+        AtomsMasses[base+1].resize(10);
+
+        for (n = 0; n < 10; n++) {
+          AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
+          N++;
+        }
+
+        break;
+      }
+
+      case('U'): {
+        AtomsInBase[base]=7;
+        AtomsBases[base].resize(7);
+        AtomsMasses[base].resize(7);
+
+        for (n = 0; n < 7; n++) {
+          AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
+          N++;
+        }
+
+        AtomsInBase[base+1]=10;
+        AtomsBases[base+1].resize(10);
+        AtomsMasses[base+1].resize(10);
+
+        for (n = 0; n < 10; n++) {
+          AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
+          N++;
+        }
+
+        break;
+      }
+    }
+
+    if(FITTED){  // if fitting was requested fit every base and return the three relavant positions for the construction of the base frames
+      fit(BASES[base], AtomsBases[base], &refAtoms[base][0], &refAtoms[base][1], &refAtoms[base][2]);
+      fit(BASES[base+1], AtomsBases[base+1], &refAtoms[base+1][0], &refAtoms[base+1][1], &refAtoms[base+1][2]);
+          
+    }else{  // if no fitting was requested the first three atoms give the relevant positions for constructing the frames
+      refAtoms[base] = {AtomsBases[base][0],AtomsBases[base][1],AtomsBases[base][2]};
+      refAtoms[base+1] = {AtomsBases[base+1][0],AtomsBases[base+1][1],AtomsBases[base+1][2]};
+    }
+  }
+  natoms = N; //identify the total number of atoms used
+ //
+
+ // create base frames
+
+  for(base=0;base<nbases;base++){  // for every base create a referrence frame and point
+
+    glycosidic=delta(refAtoms[base][1],refAtoms[base][0]);  // define the glycosidic bond
+    internal=delta(refAtoms[base][1],refAtoms[base][2]);  // get the internal bond used in frame construction
+        
+    Baseframes[base] = BaseFrame(glycosidic, internal);  // construct the base frame
+    BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], AtomsBases[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
+
+
+    if((base%2) == 1){  // deal with the 3'->5', 5'->3' anti-symmetry making the tangents of opposing bases point in the same direction()
+      Baseframes[base][2] = -1*Baseframes[base][2]; //making the tangents of opposing bases point in the same direction
+      Baseframes[base][1] = -1*Baseframes[base][1]; //also making the e2 vectors (connecting backbones) not point against but "with" each other
+    }
+    //define atoms as function of frame
+        
+    BaseRedefsBase[base].resize(AtomsInBase[base]);
+    for(n=0;n<AtomsInBase[base];n++){
+      for(i=0;i<3;i++){
+        BaseRedefsBase[base][n][i] = dotProduct(AtomsBases[base][n]-BaseRefs[base], Baseframes[base][i]);  // for future reference we calculate the position of the atoms in the base frame
+      }
+    }
+
+  }
+ //    
+      
 
   switch(cirtoNA::INPUTMODE){
 
  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  ///////////////////////////////////////////Pair//////////////////////////////////////////////////////////////////////////////////////// 
     case(pair):{  // To be converted back from new sequence setup
-      //initialize
+     //initialize
+
+      // transformtion
+      vector<VectorGeneric<3>> Pairframe = Zero3x3, TransformationMatrixPair = Zero3x3;
+      VectorGeneric<3> RotationvectorPair = Vector(0, 0, 0), pairTranslation = Vector(0, 0, 0);
+
+      // derivatives of Pair and step mids and rotations to underlying baseframe rotations
+      vector<vector<VectorGeneric<3>>> DRotationVectorDPairTransformation(3, Zero3x3);
+      vector<vector<VectorGeneric<3>>> DRotationVectorDPairRotation(2, Zero3x3);
+      vector<vector<vector<VectorGeneric<3>>>> DPairTransformationDRotation(2,Zero3x3x3), DPairMidDRotation(2,Zero3x3x3);
+
+      // derivatives used in producing ders to atoms
+      vector<VectorGeneric<3>> DbuckleDBaseRot(2, Vector(0, 0, 0)), DpropellerDBaseRot(2, Vector(0, 0, 0)), DopeningDBaseRot(2, Vector(0, 0, 0));
+      vector<vector<VectorGeneric<3>>> DbuckleDbaseframe(2, Zero3x3), DpropellerDbaseframe(2, Zero3x3), DopeningDbaseframe(2, Zero3x3);
+
+      // output ders
+      VectorGeneric<3>  DbuckleDatom, DpropellerDatom, DopeningDatom;
+
+      // output vars
+      double buckle, propeller, opening, shear, stretch, stagger;
+      //output pointers
+      Value* valuesbuckle, valuespropeller, valuesopening;
+      Value* valuesshear, valuesstretch, valuesstagger;
+
+     //
+
+      TransformationMatrixPair = RotationMatrix(Baseframes[0], Baseframes[1]);  // the rotation matrix that transforms the left base to the right (given in the lab frame)
+      RotationvectorPair = RotationVector(TransformationMatrixPair); // convert the rotation to axis angle representation
+      Pairframe = midFrame(Baseframes[0], RotationvectorPair); // find the frame halfway between the two base frames
+      pairTranslation = BaseRefs[1]-BaseRefs[0];  // Calculate the translation vector between the bases
+
+      //bookkeepderivatives
+
+      DRotationVectorDPairTransformation = DVectorDTransformation(RotationvectorPair, TransformationMatrixPair); // calculate the derivative from transforming the matrix into axis angle
+
+      for(base=0;base<2;base++){
+        DPairTransformationDRotation[base] = DTransformationDRot(Baseframes[0], Baseframes[1], pow(-1.0,base+1)); // calculate the derivative of the transformation to rotations of the base frames
+
+        for(i=0;i<3;i++){
+          for(x=0;x<3;x++){
+            for(k=0;k<3;k++){
+              for(l=0;l<3;l++){
+                DRotationVectorDPairRotation[base][x][i] += DPairTransformationDRotation[base][x][k][l]*DRotationVectorDPairTransformation[k][l][i];  //this is the derivative of a vector (axis-angle) to rotations of the base frames through the chain rule
+              }
+            }
+          }
+        }
+
+        DPairMidDRotation[base] = DMidDRot(Pairframe); // get the derivative of the midframe to baseframe rotations
+      }
+
+      buckle = dotProduct(RotationvectorPair,Pairframe[0]);
+      propeller = dotProduct(RotationvectorPair,Pairframe[1]);
+      opening = dotProduct(RotationvectorPair,Pairframe[2]);
+
+      shear = dotProduct(pairTranslation,Pairframe[0]);
+      stretch = dotProduct(pairTranslation,Pairframe[1]);
+      stagger = dotProduct(pairTranslation,Pairframe[2]);
+
+      valuesbuckle=getPntrToComponent("buckle");
+      valuespropeller=getPntrToComponent("propeller");
+      valuesopening=getPntrToComponent("opening");
+
+      valuesshear=getPntrToComponent("shear");
+      valuesstretch=getPntrToComponent("stretch");
+      valuesstagger=getPntrToComponent("stagger");
+
+
+      valuesbuckle->set(buckle); 
+      valuespropeller->set(propeller); 
+      valuesopening->set(opening);
+ 
+      valuesshear->set(shear); 
+      valuesstretch->set(stretch); 
+      valuesstagger->set(stagger);
+
+      N=0;
+
+      for(base=0;base<2;base++){
+
+          for(x=0;x<3;x++){
+            DbuckleDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][0]); 
+            DbuckleDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[0]);
+
+            DpropellerDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][1]);
+            DpropellerDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[1]);
+
+            DopeningDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][2]);
+            DopeningDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframes[2]);
+          }
+
+
+          VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+          for(n=0;n<AtomsInBase[base];n++){
+            for(x=0;x<3;x++){
+              InertiaRedef[x] += AtomsMasses[base][n]*(pow(BaseRedefsBase[base][n][(x+1)%3],2) + pow(BaseRedefsBase[base][n][(x+2)%3],2));
+            }
+          }   
+
+          for(x=0;x<3;x++){
+            DbuckleDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DbuckleDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DbuckleDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DpropellerDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DpropellerDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DpropellerDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DopeningDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DopeningDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DopeningDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          }
+
+
+          for(n=0;n<AtomsInBase[base];n++){ // small n keeps track of the index within the base
+            DbuckleDatom = Vector(0,0,0);
+            DpropellerDatom = Vector(0,0,0);
+            DopeningDatom = Vector(0,0,0);
+            if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+              for(x=0;x<3;x++){
+                DbuckleDatom -= DbuckleDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+                DpropellerDatom -= DpropellerDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+                DopeningDatom -= DopeningDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+              }
+            
+             // now the derivatives of atom N can be outputted
+              setAtomsDerivatives(valuesbuckle,N,DbuckleDatom);  
+              setAtomsDerivatives(valuespropeller,N,DpropellerDatom);
+              setAtomsDerivatives(valuesopening,N,DopeningDatom);
+            }else{
+              setAtomsDerivatives(valuesbuckle,N,Vector(0,0,0));  
+              setAtomsDerivatives(valuespropeller,N,Vector(0,0,0));
+              setAtomsDerivatives(valuesopening,N,Vector(0,0,0));
+            }
+
+           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+            setAtomsDerivatives(valuesshear,N,pow(-1,base)*Pairframes[0]);
+            setAtomsDerivatives(valuesstretch,N,pow(-1,base)*Pairframes[1]);
+            setAtomsDerivatives(valuesstagger,N,pow(-1,base)*Pairframes[2]);
+           
+            N++;  // large N is the overall index in the atom list
+          }
+        }
+
       break;
       }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  ///////////////////////////////////////////Step////////////////////////////////////////////////////////////////////////////////////////      
     case(step):{  // to be redone (simplified) from Sequence mode
@@ -1154,15 +1503,7 @@ void cirtoNA::calculate(){
      //initialize
       //define needed variables
 
-      int npairs, nbases, nsteps, natoms;  // global numbers
       int pair, base, step;  // counters
-
-     //
-
-     // get size of chain for initialization
-      nbases = BASES.size();
-      npairs = nbases/2;
-      nsteps = npairs-1;
 
      //
 
@@ -1211,8 +1552,6 @@ void cirtoNA::calculate(){
       // output derivatives
       VectorGeneric<3>  DtiltDatom, DrollDatom, DtwistDatom, DbuckleDatom, DpropellerDatom, DopeningDatom;
 
-      vector<VectorGeneric<3>> HalfRotationMatrix(3, Vector(0, 0, 0));
-
      //
       
      // initialize pointers for output
@@ -1226,180 +1565,6 @@ void cirtoNA::calculate(){
       valuesbuckle.resize(npairs); valuespropeller.resize(npairs); valuesopening.resize(npairs); 
       valuesshear.resize(npairs); valuesstretch.resize(npairs); valuesstagger.resize(npairs);
 
-     //
-
-     // pbc handling
-
-      if(pbc){makeWhole();}
-
-     //
-
-     // fitting and retrieving atoms
-      N=0;
-      for(base=0;base<(nbases-1);base=base+2){ // for all pairs in the DNA chain check the first base, second base should be complementary
-        switch(BASES[base]){  //statements to load the required atoms depinding on the sequence provided
-
-          case('A'): {
-            AtomsInBase[base]=10;
-            AtomsBases[base].resize(10);
-            AtomsMasses[base].resize(10);
-
-            for (n = 0; n < 10; n++) {
-              AtomsBases[base][n] = getPosition(N);
-              AtomsMasses[base][n] = getMass(N);
-              N++;
-            }
-
-            AtomsInBase[base+1]=7;
-            AtomsBases[base+1].resize(7);
-            AtomsMasses[base+1].resize(7);
-
-            for (n = 0; n < 7; n++) {
-              AtomsBases[base + 1][n] = getPosition(N);
-              AtomsMasses[base + 1][n] = getMass(N);
-              N++;
-            }
-
-            break;
-          }
-
-          case('C'): {
-            AtomsInBase[base]=7;
-            AtomsBases[base].resize(7);
-            AtomsMasses[base].resize(7);
-
-            for (n = 0; n < 7; n++) {
-              AtomsBases[base][n] = getPosition(N);
-              AtomsMasses[base][n] = getMass(N);
-              N++;
-            }
-
-            AtomsInBase[base+1]=10;
-            AtomsBases[base+1].resize(10);
-            AtomsMasses[base+1].resize(10);
-
-            for (n = 0; n < 10; n++) {
-              AtomsBases[base + 1][n] = getPosition(N);
-              AtomsMasses[base + 1][n] = getMass(N);
-              N++;
-            }
-
-            break;
-          }
-
-          case('G'): {
-            AtomsInBase[base]=10;
-            AtomsBases[base].resize(10);
-            AtomsMasses[base].resize(10);
-
-            for (n = 0; n < 10; n++) {
-              AtomsBases[base][n] = getPosition(N);
-              AtomsMasses[base][n] = getMass(N);
-              N++;
-            }
-
-            AtomsInBase[base+1]=7;
-            AtomsBases[base+1].resize(7);
-            AtomsMasses[base+1].resize(7);
-
-            for (n = 0; n < 7; n++) {
-              AtomsBases[base + 1][n] = getPosition(N);
-              AtomsMasses[base + 1][n] = getMass(N);
-              N++;
-            }
-
-            break;
-          }
-
-          case('T'): {
-            AtomsInBase[base]=7;
-            AtomsBases[base].resize(7);
-            AtomsMasses[base].resize(7);
-
-            for (n = 0; n < 7; n++) {
-              AtomsBases[base][n] = getPosition(N);
-              AtomsMasses[base][n] = getMass(N);
-              N++;
-            }
-
-            AtomsInBase[base+1]=10;
-            AtomsBases[base+1].resize(10);
-            AtomsMasses[base+1].resize(10);
-
-            for (n = 0; n < 10; n++) {
-              AtomsBases[base + 1][n] = getPosition(N);
-              AtomsMasses[base + 1][n] = getMass(N);
-              N++;
-            }
-
-            break;
-          }
-
-          case('U'): {
-            AtomsInBase[base]=7;
-            AtomsBases[base].resize(7);
-            AtomsMasses[base].resize(7);
-
-            for (n = 0; n < 7; n++) {
-              AtomsBases[base][n] = getPosition(N);
-              AtomsMasses[base][n] = getMass(N);
-              N++;
-            }
-
-            AtomsInBase[base+1]=10;
-            AtomsBases[base+1].resize(10);
-            AtomsMasses[base+1].resize(10);
-
-            for (n = 0; n < 10; n++) {
-              AtomsBases[base + 1][n] = getPosition(N);
-              AtomsMasses[base + 1][n] = getMass(N);
-              N++;
-            }
-
-            break;
-          }
-        }
-        if(FITTED){  // if fitting was requested fit every base and return the three relavant positions for the construction of the base frames
-          fit(BASES[base], AtomsBases[base], &refAtoms[base][0], &refAtoms[base][1], &refAtoms[base][2]);
-          fit(BASES[base+1], AtomsBases[base+1], &refAtoms[base+1][0], &refAtoms[base+1][1], &refAtoms[base+1][2]);
-          
-        }else{  // if no fitting was requested the first three atoms give the relevant positions for constructing the frames
-          refAtoms[base] = {AtomsBases[base][0],AtomsBases[base][1],AtomsBases[base][2]};
-          refAtoms[base+1] = {AtomsBases[base+1][0],AtomsBases[base+1][1],AtomsBases[base+1][2]};
-        }
-      }
-      natoms = N; //identify the total number of atoms used
-
-     //
-
-     // create base frames
-
-      for(base=0;base<nbases;base++){  // for every base create a referrence frame and point
-        glycosidic=delta(refAtoms[base][1],refAtoms[base][0]);  // define the glycosidic bond
-        internal=delta(refAtoms[base][1],refAtoms[base][2]);  // get the internal bond used in frame construction
-        
-        Baseframes[base] = BaseFrame(glycosidic, internal);  // construct the base frame
-        BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], AtomsBases[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
-        BaseCenter[base] = Vector(0,0,0);
-        for(n=0;n<AtomsInBase[base];n++){
-          BaseCenter[base] += AtomsBases[base][n];
-        }
-        BaseCenter[base] = BaseCenter[base]/AtomsInBase[base];  // get the geometric center of the base
-
-        if((base%2) == 1){  // deal with the 3'->5', 5'->3' anti-symmetry making the tangents of opposing bases point in the same direction()
-            Baseframes[base][2] = -1*Baseframes[base][2]; //making the tangents of opposing bases point in the same direction
-            Baseframes[base][1] = -1*Baseframes[base][1]; //also making the e2 vectors (connecting backbones) not point against but "with" each other
-        }
-        //define atoms as function of frame
-        
-        BaseRedefsBase[base].resize(AtomsInBase[base]);
-        for(n=0;n<AtomsInBase[base];n++){
-          for(i=0;i<3;i++){
-            BaseRedefsBase[base][n][i] = dotProduct(AtomsBases[base][n]-BaseRefs[base], Baseframes[base][i]);  // for future reference we calculate the position of the atoms in the base frame
-          }
-        }
-      }    
-         
      //
 
      // a diagram for refference:
@@ -1694,9 +1859,9 @@ void cirtoNA::calculate(){
 
 
           for(n=0;n<AtomsInBase[2*pair+base];n++){ // small n keeps track of the index within the base
-            DtiltDatom = Vector(0,0,0);
-            DrollDatom = Vector(0,0,0);
-            DtwistDatom = Vector(0,0,0);
+            DbuckleDatom = Vector(0,0,0);
+            DpropellerDatom = Vector(0,0,0);
+            DopeningDatom = Vector(0,0,0);
             if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
 
               for(x=0;x<3;x++){
