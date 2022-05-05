@@ -1,6 +1,7 @@
 # cirtoNA
 Control-In-Real-Time-Of-Nucleic-Acids
-NOTICE: THIS IS sTIL UNDER ACTIVE DEVELOPMENT, MAJOR CHANGES CONTINUE TO BE MADE
+
+NOTICE: THIS IS STIL UNDER ACTIVE DEVELOPMENT, MAJOR CHANGES CONTINUE TO BE MADE
 
 cirtoNa is a tool for the real time analysis and control of Rigid Base parameters during simulation
 It is developped to work during Gromacs simulation as a part of plumed
