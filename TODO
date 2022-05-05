@@ -1,7 +1,13 @@
-add easy installer?
+X choose pivot point for torque-force translation (Base ref, Center of Mass, Pair ref, Pair CoM, glycosidic Nitrogen, ...)
+re-add Pair and Step features
+X add easy installer?
 add example/tutorial files
 add documentation on usage
-add documentation on how it works
+add documentation on how it works == technical report
 add please cite
 test
+	generate pull figures for all params
+	generate Hold figures for all params
+	resample free energy near equilibrium with umbrella
 benchmark
+	ask how to bench mark (wil be percentage usage with respect to gromacs?)

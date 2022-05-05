@@ -1,0 +1,79 @@
+#!/bin/bash
+
+
+# help message
+Help()
+{
+   # Display Help
+   echo "Script to install cirtoNA."
+   echo "The script copies the cirtoNA source code to the apropriate plumed directories."
+   echo "If told where to install plumed, the script then updates and installs plumed"
+   echo
+   echo "options:"
+   echo "-p / --plumed   required  the main directory of the plumed"
+   echo "-i / --prefix   optional  the prefix for the installation of plumed on the system"
+   echo "-h / --help     optional  print this message"
+   echo
+}
+
+
+# default options
+PLUMEDDIRECTORYGIVEN=0
+INSTALLPLUMED=0
+
+
+# input handling
+for i in "$@"; do
+  case $i in
+    -p=*|--plumed=*)
+      PLUMEDDIRECTORY="${i#*=}"
+      PLUMEDDIRECTORYGIVEN=1
+      shift # past argument=value
+      ;;
+    -i=*|--prefix=*)
+      PREFIX="${i#*=}"
+      INSTALLPLUMED=1
+      shift # past argument=value
+      ;;
+    -h|--help)
+      Help
+      exit 0
+      shift # past argument
+      ;;
+    -*|--*)
+      echo "Unknown option $i"
+      exit 1
+      ;;
+    *)
+      ;;
+   esac
+done
+
+# put code into plumed
+
+if [[ ${PLUMEDDIRECTORYGIVEN} -eq 0 ]]
+then
+	echo "Please specify the location of plumed using -p=PLUMEDDIRECTORY "
+	exit 1
+fi
+
+cp cirtoNA.cpp ${PLUMEDDIRECTORY}/src/colvar/cirtoNA.cpp
+cp cirtoNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/cirtoNAnoder.cpp
+
+# if requested install plumed
+
+if [[ ${INSTALLPLUMED} -eq 0 ]]
+then
+	echo "cirtoNA has been added to the plumed source code, it will be included once you rebuild and reinstall plumed"
+	exit 0
+fi
+
+cd ${PLUMEDDIRECTORY}
+./configure --prefix=${PREFIX}
+make -j 4
+make install
+
+
+
+
+

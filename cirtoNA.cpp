@@ -107,7 +107,7 @@ private:
   vector<vector<VectorGeneric<3>>> DRotationAxisDQ(VectorGeneric<3> Axis, vector<VectorGeneric<3>> Q);
   vector<vector<VectorGeneric<3>>> DVectorDTransformation(VectorGeneric<3> RotationVector, vector<VectorGeneric<3>> Q);
   vector<vector<VectorGeneric<3>>> DTransformationDRot(vector<VectorGeneric<3>> Q, vector<VectorGeneric<3>> frame, double direction);
-  vector<vector<VectorGeneric<3>>> DMidDRot(vector<VectorGeneric<3>>  midFrame, vector<VectorGeneric<3>> frame);
+  vector<vector<VectorGeneric<3>>> DMidDRot(vector<VectorGeneric<3>>  midFrame);
 };
 
 PLUMED_REGISTER_ACTION(cirtoNA,"CIRTONA")
@@ -519,7 +519,7 @@ cirtoNA::cirtoNA(const ActionOptions&ao):
 
   log.printf("  %d Atoms will be used\n", atoms.size());
 
-  log.printf("  version is 4.may.22\n");
+  log.printf("  version is 5.may.22 [pair-base reference differentiation]\n");
 
   //get the atoms, then calculation can start
 
@@ -1185,7 +1185,7 @@ void cirtoNA::calculate(){
       vector<int> AtomsInBase(nbases, 0);
       vector<vector<double>> AtomsMasses(nbases, Zero10);
       vector<VectorGeneric<3>> BaseCenter(nbases, Vector(0, 0, 0)), BaseRefs(nbases, Vector(0, 0, 0));
-      vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), BaseRedefs(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
+      vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), BaseRedefsBase(nbases, Zero3x3), BaseRedefsPair(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
 
       // information on Pairs and Steps
       vector<vector<VectorGeneric<3>>> Pairframes(npairs, Zero3x3), Stepframes(nsteps, Zero3x3), TransformationMatrixPair(npairs, Zero3x3), TransformationMatrixStep(nsteps, Zero3x3);
@@ -1392,10 +1392,10 @@ void cirtoNA::calculate(){
         }
         //define atoms as function of frame
         
-        BaseRedefs[base].resize(AtomsInBase[base]);
+        BaseRedefsBase[base].resize(AtomsInBase[base]);
         for(n=0;n<AtomsInBase[base];n++){
           for(i=0;i<3;i++){
-            BaseRedefs[base][n][i] = dotProduct(AtomsBases[base][n]-BaseRefs[base], Baseframes[base][i]);  // for future reference we calculate the position of the atoms in the base frame
+            BaseRedefsBase[base][n][i] = dotProduct(AtomsBases[base][n]-BaseRefs[base], Baseframes[base][i]);  // for future reference we calculate the position of the atoms in the base frame
           }
         }
       }    
@@ -1426,9 +1426,6 @@ void cirtoNA::calculate(){
         Pairframes[pair] = midFrame(Baseframes[2*pair], RotationvectorPair[pair]); // find the frame halfway between the two base frames
         pairTranslations[pair] = BaseRefs[2*pair+1]-BaseRefs[2*pair];  // Calculate the translation vector between the bases
 
-        //log.printf("RotationvectorPair of pair %d = %f, %f, %f\n", pair, RotationvectorPair[pair][0],RotationvectorPair[pair][1],RotationvectorPair[pair][2]);  
-        //log.printf("Pairframes of pair %d =  %f, %f, %f\n", pair, Pairframes[pair][0][0], Pairframes[pair][0][1],Pairframes[pair][1][2]);  
-
         //bookkeepderivatives
 
         DRotationVectorDPairTransformation[pair] = DVectorDTransformation(RotationvectorPair[pair], TransformationMatrixPair[pair]); // calculate the derivative from transforming the matrix into axis angle
@@ -1447,6 +1444,16 @@ void cirtoNA::calculate(){
           }
 
           DPairMidDRotation[pair][base] = DMidDRot(Pairframes[pair]); // get the derivative of the midframe to baseframe rotations
+
+          //setup relative atom positions
+
+          BaseRedefsPair[2*pair+base].resize(AtomsInBase[2*pair+base]); // force on the step rotations should could the bases to rotate about the reference point of the pair (this will increase stability of h-bonds)
+          for(n=0;n<AtomsInBase[2*pair+base];n++){
+            for(i=0;i<3;i++){
+              BaseRedefsPair[2*pair+base][n][i] = dotProduct(AtomsBases[2*pair+base][n]-(BaseRefs[2*pair]+0.5*pairTranslations[pair]), Baseframes[2*pair+base][i]);  // for future reference we calculate the position of the atoms in the base frame
+            }
+          }
+
         }
       }
    
@@ -1463,7 +1470,7 @@ void cirtoNA::calculate(){
         for(pair=0;pair<2;pair++){
           for(base=0;base<2;base++){
 
-            DStepTransformationDRotation[step][pair][base]=0.5*DTransformationDRot(Pairframes[step], Pairframes[step+1], pow(-1.0,pair+1));
+            DStepTransformationDRotation[step][pair][base]=DTransformationDRot(Pairframes[step], Pairframes[step+1], pow(-1.0,pair+1));  // note this is double what it should be
 
             for(i=0;i<3;i++){
               for(x=0;x<3;x++){
@@ -1474,8 +1481,8 @@ void cirtoNA::calculate(){
                 }
               }
             }
-            
-            DStepMidDRotation[step][pair][base] = 0.5*DMidDRot(Stepframes[step]);
+
+            DStepMidDRotation[step][pair][base] = DMidDRot(Stepframes[step]); // note this is double what it should be
         
           }
         }
@@ -1544,21 +1551,22 @@ void cirtoNA::calculate(){
           if(base<2){pair=0;}else{pair=1;}
 
           for(x=0;x<3;x++){
-            DtiltDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]); 
-            DtiltDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
+            // 0.5 factors included because of doubling that occured in calculating the derivatives of step frames
+            DtiltDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]); 
+            DtiltDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
 
-            DrollDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
-            DrollDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][1]);
+            DrollDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
+            DrollDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][1]);
 
-            DtwistDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][2]);
-            DtwistDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][2]);
+            DtwistDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][2]);
+            DtwistDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][2]);
           }
 
           //invert atom definition
           VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
           for(n=0;n<AtomsInBase[2*step+base];n++){
             for(x=0;x<3;x++){
-              InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefs[2*step+base][n][(x+1)%3],2) + pow(BaseRedefs[2*step+base][n][(x+2)%3],2));
+              InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsPair[2*step+base][n][(x+1)%3],2) + pow(BaseRedefsPair[2*step+base][n][(x+2)%3],2));
             }
           }   
 
@@ -1576,9 +1584,9 @@ void cirtoNA::calculate(){
             if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
 
               for(x=0;x<3;x++){
-                DtiltDatom -= DtiltDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
-                DrollDatom -= DrollDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
-                DtwistDatom -= DtwistDbaseframe[base][x]*BaseRedefs[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DtiltDatom -= DtiltDbaseframe[base][x]*BaseRedefsPair[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DrollDatom -= DrollDbaseframe[base][x]*BaseRedefsPair[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DtwistDatom -= DtwistDbaseframe[base][x]*BaseRedefsPair[2*step+base][n][x]*AtomsMasses[2*step+base][n];
               }
               
               // now the derivatives of atom N can be outputted
@@ -1610,9 +1618,6 @@ void cirtoNA::calculate(){
 
         }
 
-
-        //log.printf("DrollDatom of atom %d =  %f, %f, %f\n", N, DrollDatom[0], DrollDatom[1], DrollDatom[2]);  
-       
         for(n=N;n<natoms;n++){//atoms after the step give derivative 0
           setAtomsDerivatives(valuestilt[step],n,Vector(0,0,0));  
           setAtomsDerivatives(valuesroll[step],n,Vector(0,0,0));
@@ -1674,25 +1679,30 @@ void cirtoNA::calculate(){
           }
 
 
-          for(l=0;l<3;l++){ // derivative needs to be calculated to every vector of the frames
-          // high depends on the highest bqse numbers(2step +2) and (2step+3), Right denotes the lower number in a pair (2step+0) and (2step+2)
-            DbuckleDbaseframe[base][l] = crossProduct(DbuckleDBaseRot[base], Baseframes[2*pair + base][l]);
-            DpropellerDbaseframe[base][l] = crossProduct(DpropellerDBaseRot[base], Baseframes[2*pair + base][l]);
-            DopeningDbaseframe[base][l] = crossProduct(DopeningDBaseRot[base], Baseframes[2*pair + base][l]);
+          VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+          for(n=0;n<AtomsInBase[2*pair+base];n++){
+            for(x=0;x<3;x++){
+              InertiaRedef[x] += AtomsMasses[2*pair+base][n]*(pow(BaseRedefsBase[2*pair+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*pair+base][n][(x+2)%3],2));
+            }
+          }   
+
+          for(x=0;x<3;x++){
+            DbuckleDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DbuckleDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DbuckleDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DpropellerDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DpropellerDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DpropellerDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DopeningDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DopeningDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DopeningDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
           }
 
-          //invert atom definition
+
           for(n=0;n<AtomsInBase[2*pair+base];n++){ // small n keeps track of the index within the base
-            if(FITTED or n<3){ //IF fitting was not used the output will omly depend on the first three atoms in each base
-              for(k=0;k<3;k++){ // the outputted derivatives requested are gradients and thus vectors containing the derivative of the cv to every coordinate of the atoms position as a component.
-                DbuckleDatom[k] = 0;  
-                DpropellerDatom[k] = 0; 
-                DopeningDatom[k] = 0;  
-                for(l=0;l<3;l++){  // the atom positions have been defined in terms of the local frame and the ref point. The partial derivative of the frame vectors to the atom position can be found trough implicit derivation of that defining eqution as the coordinates of the atoms. applying the chain rule then gives the derivative of the CV to the atom position. as th cv depends on all three frame vectors this step involves summing over those vectors here represented by k.  
-                  DbuckleDatom[k] += DbuckleDbaseframe[base][l][k]*BaseRedefs[2*pair+base][n][l] ;  
-                  DpropellerDatom[k] += DpropellerDbaseframe[base][l][k]*BaseRedefs[2*pair+base][n][l] ;
-                  DopeningDatom[k] += DopeningDbaseframe[base][l][k]*BaseRedefs[2*pair+base][n][l] ;
-                }
+            DtiltDatom = Vector(0,0,0);
+            DrollDatom = Vector(0,0,0);
+            DtwistDatom = Vector(0,0,0);
+            if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+              for(x=0;x<3;x++){
+                DbuckleDatom -= DbuckleDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DpropellerDatom -= DpropellerDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DopeningDatom -= DopeningDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
               }
             
              // now the derivatives of atom N can be outputted
@@ -1727,7 +1737,6 @@ void cirtoNA::calculate(){
        
       }
 
-     //
      //
      // end
       break;
