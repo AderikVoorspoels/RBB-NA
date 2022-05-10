@@ -1,0 +1,33 @@
+To help you start in the repository 4 examples have been included:
+
+-constraining the Stretch
+-Pulling the Tilt
+-Using the Pairmode to constraining the Propeller
+-Using the Stepmode to pulling the Rise
+
+
+All are made to work with plumed 2.8 and gromacs 2020.4.
+they should however function with any later plumed and gromacs versions as long as they are compatible amongst each other.
+
+Before running through any of these however you will need to generate the proper starting setup.
+This entails using Gromacs to obtain an file with the coordinates of the Drew-Dickerson-Dodecamer, equilibrated to the NPT ensemble.
+It is from this file all further tutorial will start. 
+To generate this file navigate to the initial Data folder and execute the following steps:
+
+	- generate a .gro and .top file from the .pdb file by running: gmx pdb2gmx -f 1bna.pdb -o 1bna.gro
+	  when prompted choose the tip3p water model and the recomended force field for DNA (preferably AMBER bsc1)
+	- define the simulation box (a dodecahedral box with 2 nm extra space on either side of the molecule) by running: gmx editconf -f 1bna.gro -o box.gro -c -d 2.0 -bt dodecahedron
+	- fill the box with water molecules by: gmx solvate -cp box.gro -cs spc216.gro -o solvated.gro -p topol.top
+	- prepare to add some salt by(make sure the ions.mdp file is compatible with the forcefield you're using): gmx grompp -f ../control/ions.mdp -p topol.top -c solvated.gro -o ions.tpr
+	- than actually add it (using NaCL ad a concentration of 150mM) with: gmx genion -s ions.tpr -o concentration.gro -p topol.top -pname NA -nname CL -conc 0.15 -neutral
+	when prompted select the SOL (solvent) to be replaced by salt
+	- prepare to run some energy minimization to remove overlap between water and molecule: gmx grompp -f ../control/minim.mdp -c concentration.gro -p topol.top -o em.tpr
+        - execute the energy minimization : gmx mdrun -deffnm em -v
+        - prepare to start md in the NVT ensemble: gmx grompp -f ../control/nvt.mdp -c em.gro -r em.gro -o nvt.tpr
+        - execute the NVT equilibrqtion run : gmx mdrun -deffnm nvt -v
+        - prepare to start md in the NPT ensemble: gmx grompp -f ../control/npt.mdp -c nvt.gro -r nvt.gro -t npt.cpt -o npt.tpr
+        - execute the NPT equilibrqtion run : gmx mdrun -deffnm npt -v
+        
+Now the files npt.gro, npt.cpt and topol.top contain the onformation needed to start molecular dynamics while Controlling, In Real Time the dNA.
+To do this you can start any of the 4 tutorials.
+

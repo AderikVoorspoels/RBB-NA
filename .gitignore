@@ -1,0 +1,18 @@
+# Don't push any gromacs/ plumed output #
+#########################################
+*.gro
+*.top
+*.xtc
+*.tpr
+*.cpt
+*.edr
+*.dat
+*.itp
+
+# Avoid pushing the result of analysis on output#
+################################################
+*.png
+*.cda
+*.lis
+*.cdi
+*.ser

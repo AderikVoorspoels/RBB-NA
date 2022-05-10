@@ -1,0 +1,38 @@
+#!/bin/bash
+
+controlfile=PlumedRollControl.dat
+step=0.02
+kappa=500
+for i in {0..25}
+do
+	k=$(python3 -c "print(${i}*${step})" )
+	echo '# SETTINGS MOLFILE=1bna.pdb'> $controlfile
+	echo '# vim:ft=plumed'>> $controlfile
+	echo 'MOLINFO STRUCTURE=1bna.pdb'>> $controlfile
+	echo 'var: CIRTONA ENDS=167,199,546,578 FITTED SEQUENCE=AT'>> $controlfile
+	echo 'par: CIRTONANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
+	echo 'Restraint: RESTRAINT ARG=var.tilt0 KAPPA='$kappa' AT='$k''>> $controlfile
+	echo 'PRINT ARG=par.tilt0,par.tilt1,par.tilt2,par.tilt3,par.tilt4,var.tilt0,par.tilt6,par.tilt7,par.tilt8,par.tilt9,par.tilt10 FILE=DDD_TiltAt'$k'_Tilt.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.roll0,par.roll1,par.roll2,par.roll3,par.roll4,var.roll0,par.roll6,par.roll7,par.roll8,par.roll9,par.roll10 FILE=DDD_TiltAt'$k'_Roll.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.twist0,par.twist1,par.twist2,par.twist3,par.twist4,var.twist0,par.twist6,par.twist7,par.twist8,par.twist9,par.twist10 FILE=DDD_TiltAt'$k'_Twist.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.shift0,par.shift1,par.shift2,par.shift3,par.shift4,var.shift0,par.shift6,par.shift7,par.shift8,par.shift9,par.shift10 FILE=DDD_TiltAt'$k'_Shift.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.slide0,par.slide1,par.slide2,par.slide3,par.slide4,var.slide0,par.slide6,par.slide7,par.slide8,par.slide9,par.slide10 FILE=DDD_TiltAt'$k'_Slide.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.rise0,par.rise1,par.rise2,par.rise3,par.rise4,var.rise0,par.rise6,par.rise7,par.rise8,par.rise9,par.rise10 FILE=DDD_TiltAt'$k'_Rise.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.buckle0,par.buckle1,par.buckle2,par.buckle3,par.buckle4,var.buckle0,var.buckle1,par.buckle7,par.buckle8,par.buckle9,par.buckle10,par.buckle11 FILE=DDD_TiltAt'$k'_Buckle.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.propeller0,par.propeller1,par.propeller2,par.propeller3,par.propeller4,var.propeller0,var.propeller1,par.propeller7,par.propeller8,par.propeller9,par.propeller10,par.propeller11 FILE=DDD_TiltAt'$k'_Propeller.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.opening0,par.opening1,par.opening2,par.opening3,par.opening4,var.opening0,var.opening1,par.opening7,par.opening8,par.opening9,par.opening10,par.opening11 FILE=DDD_TiltAt'$k'_Opening.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.shear0,par.shear1,par.shear2,par.shear3,par.shear4,var.shear0,var.shear1,par.shear7,par.shear8,par.shear9,par.shear10,par.shear11 FILE=DDD_TiltAt'$k'_Shear.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.stretch0,par.stretch1,par.stretch2,par.stretch3,par.stretch4,var.stretch0,var.stretch1,par.stretch7,par.stretch8,par.stretch9,par.stretch10,par.stretch11 FILE=DDD_TiltAt'$k'_Stretch.dat STRIDE=10'>> $controlfile
+	echo 'PRINT ARG=par.stagger0,par.stagger1,par.stagger2,par.stagger3,par.stagger4,var.stagger0,var.stagger1,par.stagger7,par.stagger8,par.stagger9,par.stagger10,par.stagger11 FILE=DDD_TiltAt'$k'_Stagger.dat STRIDE=10'>> $controlfile
+
+	if [ $i -eq 0 ]
+	then
+		gmx grompp -o DDD_TiltAt$k.tpr -p topol.top -f ../control/md_100ps.mdp -c npt.gro -t npt.cpt -r npt.gro
+		gmx mdrun -plumed $controlfile -deffnm DDD_TiltAt$k -v
+	else
+		let prev=$i-1
+		l=$(python3 -c "print($prev*$step)")
+		gmx grompp -o DDD_TiltAt$k.tpr -p topol.top -f ../control/md_100ps.mdp -c DDD_TiltAt$l.gro -t DDD_TiltAt$l.cpt -r DDD_TiltAt$l.gro
+		gmx mdrun -plumed $controlfile -deffnm DDD_TiltAt$k -v
+	fi
+done
