@@ -1900,21 +1900,21 @@ void cirtoNA::calculate(){
 
           for(x=0;x<3;x++){
             // 0.5 factors included because of doubling that occured in calculating the derivatives of step frames
-            DtiltDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]); 
-            DtiltDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
+            DtiltDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]); 
+            DtiltDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
 
-            DrollDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
-            DrollDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][1]);
+            DrollDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
+            DrollDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][1]);
 
-            DtwistDBaseRot[base][x] =  dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][2]);
-            DtwistDBaseRot[base][x] += dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][2]);
+            DtwistDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][2]);
+            DtwistDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][2]);
           }
 
           //invert atom definition
           VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
           for(n=0;n<AtomsInBase[2*step+base];n++){
             for(x=0;x<3;x++){
-              InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsBase[step+pair][n][(x+1)%3],2) + pow(BaseRedefsBase[step+pair][n][(x+2)%3],2));
+              InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsBase[2*step+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*step+base][n][(x+2)%3],2));
             }
           }   
 

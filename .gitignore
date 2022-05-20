@@ -8,6 +8,10 @@
 *.edr
 *.dat
 *.itp
+*.top
+*.trr
+*.log
+*#
 
 # Avoid pushing the result of analysis on output#
 ################################################
@@ -16,3 +20,4 @@
 *.lis
 *.cdi
 *.ser
+bck.*
