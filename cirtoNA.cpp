@@ -518,7 +518,7 @@ cirtoNA::cirtoNA(const ActionOptions&ao):
 
   log.printf("  %d Atoms will be used\n", atoms.size());
 
-  log.printf("  version is 9.may.22 [CoM instead of reference]\n");
+  log.printf("  version is 7.June.22 [fixed bp rotations]\n");
 
   //get the atoms, then calculation can start
 
@@ -1900,7 +1900,7 @@ void cirtoNA::calculate(){
 
           for(x=0;x<3;x++){
             // 0.5 factors included because of doubling that occured in calculating the derivatives of step frames
-            DtiltDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]); 
+            DtiltDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]);
             DtiltDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
 
             DrollDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
@@ -1913,8 +1913,10 @@ void cirtoNA::calculate(){
           //invert atom definition
           VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
           for(n=0;n<AtomsInBase[2*step+base];n++){
-            for(x=0;x<3;x++){
-              InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsBase[2*step+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*step+base][n][(x+2)%3],2));
+            if(FITTED or n<3){
+              for(x=0;x<3;x++){
+                InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsBase[2*step+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*step+base][n][(x+2)%3],2));
+              }
             }
           }   
 
@@ -2029,8 +2031,10 @@ void cirtoNA::calculate(){
 
           VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
           for(n=0;n<AtomsInBase[2*pair+base];n++){
-            for(x=0;x<3;x++){
-              InertiaRedef[x] += AtomsMasses[2*pair+base][n]*(pow(BaseRedefsBase[2*pair+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*pair+base][n][(x+2)%3],2));
+            if(FITTED or n<3){
+              for(x=0;x<3;x++){
+                InertiaRedef[x] += AtomsMasses[2*pair+base][n]*(pow(BaseRedefsBase[2*pair+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*pair+base][n][(x+2)%3],2));
+              }
             }
           }   
 
@@ -2048,9 +2052,9 @@ void cirtoNA::calculate(){
             if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
 
               for(x=0;x<3;x++){
-                DbuckleDatom -= DbuckleDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
-                DpropellerDatom -= DpropellerDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
-                DopeningDatom -= DopeningDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DbuckleDatom += DbuckleDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DpropellerDatom += DpropellerDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DopeningDatom += DopeningDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
               }
             
              // now the derivatives of atom N can be outputted
