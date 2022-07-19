@@ -34,7 +34,7 @@ axs[0,0].set_ylabel('tilt [deg]')
 
 
 axs[1,1].plot(dx*np.array(range(0, steps+1, 1))*180/pi, stiffnesses)
-axs[1,1].set_xlabel('at (deg)')
-axs[1,1].set_ylabel('gemeten tilt stiffness')
+axs[1,1].set_xlabel('at [deg]')
+axs[1,1].set_ylabel('measured tilt stiffness [$k_{b}T$]')
 axs[1,1].set_ylim([0,750])
 fig.savefig('quickMovePlot.png')

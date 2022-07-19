@@ -9,8 +9,8 @@ do
 	echo '# SETTINGS MOLFILE=1bna.pdb'> $controlfile
 	echo '# vim:ft=plumed'>> $controlfile
 	echo 'MOLINFO STRUCTURE=1bna.pdb'>> $controlfile
-	echo 'var: CIRTONA ENDS=167,199,546,578 FITTED SEQUENCE=AT'>> $controlfile
-	echo 'par: CIRTONANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
+	echo 'var: CRTNA ENDS=167,199,546,578 FITTED SEQUENCE=AT'>> $controlfile
+	echo 'par: CRTNANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
 	echo 'Restraint: RESTRAINT ARG=var.tilt0 KAPPA='$kappa' AT='$k''>> $controlfile
 	echo 'PRINT ARG=par.tilt0,par.tilt1,par.tilt2,par.tilt3,par.tilt4,var.tilt0,par.tilt6,par.tilt7,par.tilt8,par.tilt9,par.tilt10 FILE=DDD_TiltAt'$k'_Tilt.dat STRIDE=10'>> $controlfile
 	echo 'PRINT ARG=par.roll0,par.roll1,par.roll2,par.roll3,par.roll4,var.roll0,par.roll6,par.roll7,par.roll8,par.roll9,par.roll10 FILE=DDD_TiltAt'$k'_Roll.dat STRIDE=10'>> $controlfile

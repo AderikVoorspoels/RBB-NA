@@ -3,7 +3,7 @@ To help you start in the repository 4 examples have been included:
 -constraining the Stretch
 -Pulling the Tilt
 -Using the Pairmode to constraining the Propeller
--Using the Stepmode to pulling the Rise
+-Using the Stepmode to pull the Rise
 
 
 All are made to work with plumed 2.8 and gromacs 2020.4.
