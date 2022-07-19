@@ -5,8 +5,8 @@
 Help()
 {
    # Display Help
-   echo "Script to install cirtoNA."
-   echo "The script copies the cirtoNA source code to the apropriate plumed directories."
+   echo "Script to install crtNA."
+   echo "The script copies the crtNA source code to the apropriate plumed directories."
    echo "If told where to install plumed, the script then updates and installs plumed"
    echo
    echo "options:"
@@ -57,14 +57,14 @@ then
 	exit 1
 fi
 
-cp cirtoNA.cpp ${PLUMEDDIRECTORY}/src/colvar/cirtoNA.cpp
-cp cirtoNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/cirtoNAnoder.cpp
+cp crtNA.cpp ${PLUMEDDIRECTORY}/src/colvar/crtNA.cpp
+cp crtNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/crtNAnoder.cpp
 
 # if requested install plumed
 
 if [[ ${INSTALLPLUMED} -eq 0 ]]
 then
-	echo "cirtoNA has been added to the plumed source code, it will be included once you rebuild and reinstall plumed"
+	echo "crtNA has been added to the plumed source code, it will be included once you rebuild and reinstall plumed"
 	exit 0
 fi
 
