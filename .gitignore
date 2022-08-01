@@ -12,6 +12,7 @@
 *.trr
 *.log
 *#
+*mdout.mdp
 
 # Avoid pushing the result of analysis on output#
 ################################################
