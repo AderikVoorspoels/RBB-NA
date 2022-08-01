@@ -1,9 +1,16 @@
 X choose pivot point for torque-force translation (Base ref, Center of Mass, Pair ref, Pair CoM, glycosidic Nitrogen, ...)
 X re-add Pair and Step features
 X add easy installer?
-add example/tutorial files
+X add example/tutorial files
 	X script file
-	analysis
+	X analysis
+name change rbbNA
+	X Installer
+	X Code Content
+	X Code Filename
+	X Tutorial
+	X Readme
+	Repostitory
 add documentation on usage
 add documentation on how it works == technical report
 add please cite

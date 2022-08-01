@@ -1,8 +1,8 @@
 title                   = DNA Npt simulation
 ; Run parameters
 integrator              = md        ; leap-frog integrator
-nsteps                  = 500000    ; 0.02 * 50 00 = 10 0 ps = 0.10 ns
-dt                      = 0.0002     ; 0.2 fs
+nsteps                  = 50000    ; 0.2 * 50 0 = 10 0 ps = 0.10 ns
+dt                      = 0.002     ; 2 fs
 ; Output control
 nstxout			= 0
 nstvout			= 0

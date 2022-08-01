@@ -5,8 +5,8 @@
 Help()
 {
    # Display Help
-   echo "Script to install crtNA."
-   echo "The script copies the crtNA source code to the apropriate plumed directories."
+   echo "Script to install rbbNA."
+   echo "The script copies the rbbNA source code to the apropriate plumed directories."
    echo "If told where to install plumed, the script then updates and installs plumed"
    echo
    echo "options:"
@@ -57,14 +57,14 @@ then
 	exit 1
 fi
 
-cp crtNA.cpp ${PLUMEDDIRECTORY}/src/colvar/crtNA.cpp
-cp crtNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/crtNAnoder.cpp
+cp crtNA.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNA.cpp
+cp crtNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNAnoder.cpp
 
 # if requested install plumed
 
 if [[ ${INSTALLPLUMED} -eq 0 ]]
 then
-	echo "crtNA has been added to the plumed source code, it will be included once you rebuild and reinstall plumed"
+	echo "rbbNA has been added to the plumed source code, it will be included once you rebuild and reinstall plumed"
 	exit 0
 fi
 

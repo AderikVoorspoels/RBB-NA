@@ -35,7 +35,7 @@ using namespace std;
 namespace PLMD {
 namespace colvar {
 
-//+PLUMEDOC crtNAnoder
+//+PLUMEDOC RBBNA
 /*
 This file provides a template for if you want to introduce a new CV.
 
@@ -46,7 +46,6 @@ they are named here as in the literature:
 (tilt, roll, twist, shift slide rise, buckle, proppeller, opening, shear, stretch, and stagger)
 the first three are base pair step rotations, the folowing three base pair step translations, 
 the next are the base pair rotations and the final three describe the base pair translations
-this verion is for analysis alone and doesn't calculate derivatives
 
 \par Examples
 
@@ -54,7 +53,7 @@ this verion is for analysis alone and doesn't calculate derivatives
 
 \plumedfile
 # This should be a sample input.
-rotations: CRTNA BASE1=1,2,3 BASE2=4,5,6 BASE3=7,8,9 BASE4=10,11,12
+rotations: RBBNA BASE1=1,2,3 BASE2=4,5,6 BASE3=7,8,9 BASE4=10,11,12
 PRINT ARG=rotations.roll,rotations.tilt,rotations.twist STRIDE=100 FILE=COLVAR
 #here if the order of atoms per base is N1(Y)/N9(R) C'1 C2(Y)/C4(R) where Y are the Pyrimidenes (T and C), R are the Purines (A and G)
 \endplumedfile
@@ -64,7 +63,7 @@ PRINT ARG=rotations.roll,rotations.tilt,rotations.twist STRIDE=100 FILE=COLVAR
 */
 //+ENDPLUMEDOC
 
-class crtNAnoder : public Colvar {
+class rbbNA : public Colvar {
   bool components;
   bool pbc;
   bool RNA;
@@ -75,7 +74,7 @@ class crtNAnoder : public Colvar {
   vector<char> BASES;
   
 public:
-  explicit crtNAnoder(const ActionOptions&);
+  explicit rbbNA(const ActionOptions&);
 // active methods:
   void calculate() override;
   static void registerKeywords(Keywords& keys);
@@ -93,6 +92,8 @@ private:
   VectorGeneric<3> Normalize(VectorGeneric<3> vec);
   VectorGeneric<3> AxisRotation(VectorGeneric<3> v, VectorGeneric<3> k, double theta);
 
+  vector<VectorGeneric<3>> Skew(VectorGeneric<3> phi);
+
   vector<VectorGeneric<3>> RotationMatrix(vector<VectorGeneric<3>> frame1, vector<VectorGeneric<3>> frame2);
   VectorGeneric<3> RotationAxis(vector<VectorGeneric<3>> Q);
   double RotationAngle(vector<VectorGeneric<3>> Q);
@@ -102,11 +103,20 @@ private:
 
   vector<VectorGeneric<3>> BaseFrame(VectorGeneric<3> glycosidic, VectorGeneric<3> internal);
   VectorGeneric<3> RefPoint(VectorGeneric<3> glycosidic, VectorGeneric<3> normal, VectorGeneric<3> nitrogen);
+  
+  vector<VectorGeneric<3>> DNormalizeDvec(VectorGeneric<3> normedVec, VectorGeneric<3> vec);
+  VectorGeneric<3> DNormDvec(double norm, VectorGeneric<3> vec);
+
+  vector<VectorGeneric<3>> DRotationAngleDQ(double theta, vector<VectorGeneric<3>> Q);
+  vector<vector<VectorGeneric<3>>> DRotationAxisDQ(VectorGeneric<3> Axis, vector<VectorGeneric<3>> Q);
+  vector<vector<VectorGeneric<3>>> DVectorDTransformation(VectorGeneric<3> RotationVector, vector<VectorGeneric<3>> Q);
+  vector<vector<VectorGeneric<3>>> DTransformationDRot(vector<VectorGeneric<3>> Q, vector<VectorGeneric<3>> frame, double direction);
+  vector<vector<VectorGeneric<3>>> DMidDRot(vector<VectorGeneric<3>>  midFrame);
 };
 
-PLUMED_REGISTER_ACTION(crtNAnoder,"CRTNANODER")
+PLUMED_REGISTER_ACTION(rbbNA,"RBBNA")
 
-void crtNAnoder::registerKeywords(Keywords& keys) {
+void rbbNA::registerKeywords(Keywords& keys) {
   Colvar::registerKeywords( keys );
   keys.addFlag("FITTED",false,"fit the bases with an ideal base before calulation of relative deformation");
   keys.addFlag("RNA",false,"if checking RNA set to true complete A in sequence with coplementary U");
@@ -159,7 +169,7 @@ void crtNAnoder::registerKeywords(Keywords& keys) {
 }
 
 
-void crtNAnoder::completeBase(char type, AtomNumber c1, vector<AtomNumber> *atoms, AtomNumber *next){
+void rbbNA::completeBase(char type, AtomNumber c1, vector<AtomNumber> *atoms, AtomNumber *next){
   switch(type){
     case('A'):{
       (*atoms).resize(10);
@@ -242,7 +252,7 @@ void crtNAnoder::completeBase(char type, AtomNumber c1, vector<AtomNumber> *atom
 }
 
 
-crtNAnoder::crtNAnoder(const ActionOptions&ao):
+rbbNA::rbbNA(const ActionOptions&ao):
   PLUMED_COLVAR_INIT(ao),
   pbc(true),
   components(true),
@@ -321,15 +331,15 @@ crtNAnoder::crtNAnoder(const ActionOptions&ao):
         atoms[j+atomsBase1.size()] = atomsBase2[j];
       }
 
-      addComponent("buckle"); componentIsNotPeriodic("buckle");
-      addComponent("propeller"); componentIsNotPeriodic("propeller");
-      addComponent("opening"); componentIsNotPeriodic("opening");
+      addComponentWithDerivatives("buckle"); componentIsNotPeriodic("buckle");
+      addComponentWithDerivatives("propeller"); componentIsNotPeriodic("propeller");
+      addComponentWithDerivatives("opening"); componentIsNotPeriodic("opening");
       
-      addComponent("shear"); componentIsNotPeriodic("shear");
-      addComponent("stretch"); componentIsNotPeriodic("stretch");
-      addComponent("stagger"); componentIsNotPeriodic("stagger");
+      addComponentWithDerivatives("shear"); componentIsNotPeriodic("shear");
+      addComponentWithDerivatives("stretch"); componentIsNotPeriodic("stretch");
+      addComponentWithDerivatives("stagger"); componentIsNotPeriodic("stagger");
       
-      log.printf("crt-NA noder Basepair between base1 %d and base2 %d \n", atomsBase1[0].serial(),atomsBase2[0].serial());
+      log.printf("rbb-NA Basepair between base1 %d and base2 %d \n", atomsBase1[0].serial(),atomsBase2[0].serial());
       break;
     }    
     case(step):{// request the required atoms as needed and create output handling
@@ -375,15 +385,15 @@ crtNAnoder::crtNAnoder(const ActionOptions&ao):
           printf("\n");
       }
       
-      addComponent("tilt"); componentIsNotPeriodic("tilt");
-      addComponent("roll"); componentIsNotPeriodic("roll");
-      addComponent("twist"); componentIsNotPeriodic("twist");
+      addComponentWithDerivatives("tilt"); componentIsNotPeriodic("tilt");
+      addComponentWithDerivatives("roll"); componentIsNotPeriodic("roll");
+      addComponentWithDerivatives("twist"); componentIsNotPeriodic("twist");
       
-      addComponent("shift"); componentIsNotPeriodic("shift");
-      addComponent("slide"); componentIsNotPeriodic("slide");
-      addComponent("rise"); componentIsNotPeriodic("rise");
+      addComponentWithDerivatives("shift"); componentIsNotPeriodic("shift");
+      addComponentWithDerivatives("slide"); componentIsNotPeriodic("slide");
+      addComponentWithDerivatives("rise"); componentIsNotPeriodic("rise");
 
-      log.printf("crt-NA noder Basepairstep between base1 %d, base2 %d, base3 %d and base4 %d\n", atomsBases[0][0].serial(), atomsBases[1][0].serial(), atomsBases[2][0].serial(), atomsBases[3][0].serial());
+      log.printf("rbb-NA Basepairstep between base1 %d, base2 %d, base3 %d and base4 %d\n", atomsBases[0][0].serial(), atomsBases[1][0].serial(), atomsBases[2][0].serial(), atomsBases[3][0].serial());
       break;
 
     }
@@ -470,25 +480,25 @@ crtNAnoder::crtNAnoder(const ActionOptions&ao):
         }
 
         // add length bp parameters as components
-        addComponent("buckle"+to_string(j)); componentIsNotPeriodic("buckle"+to_string(j));
-        addComponent("propeller"+to_string(j)); componentIsNotPeriodic("propeller"+to_string(j));
-        addComponent("opening"+to_string(j)); componentIsNotPeriodic("opening"+to_string(j));
+        addComponentWithDerivatives("buckle"+to_string(j)); componentIsNotPeriodic("buckle"+to_string(j));
+        addComponentWithDerivatives("propeller"+to_string(j)); componentIsNotPeriodic("propeller"+to_string(j));
+        addComponentWithDerivatives("opening"+to_string(j)); componentIsNotPeriodic("opening"+to_string(j));
          
-        addComponent("shear"+to_string(j)); componentIsNotPeriodic("shear"+to_string(j));
-        addComponent("stretch"+to_string(j)); componentIsNotPeriodic("stretch"+to_string(j));
-        addComponent("stagger"+to_string(j)); componentIsNotPeriodic("stagger"+to_string(j));
+        addComponentWithDerivatives("shear"+to_string(j)); componentIsNotPeriodic("shear"+to_string(j));
+        addComponentWithDerivatives("stretch"+to_string(j)); componentIsNotPeriodic("stretch"+to_string(j));
+        addComponentWithDerivatives("stagger"+to_string(j)); componentIsNotPeriodic("stagger"+to_string(j));
       
         if(!(j==0)){  // add length-1 bp step parameters as components
-          addComponent("tilt"+to_string(j-1)); componentIsNotPeriodic("tilt"+to_string(j-1));
-          addComponent("roll"+to_string(j-1)); componentIsNotPeriodic("roll"+to_string(j-1));
-          addComponent("twist"+to_string(j-1)); componentIsNotPeriodic("twist"+to_string(j-1));
+          addComponentWithDerivatives("tilt"+to_string(j-1)); componentIsNotPeriodic("tilt"+to_string(j-1));
+          addComponentWithDerivatives("roll"+to_string(j-1)); componentIsNotPeriodic("roll"+to_string(j-1));
+          addComponentWithDerivatives("twist"+to_string(j-1)); componentIsNotPeriodic("twist"+to_string(j-1));
       
-          addComponent("shift"+to_string(j-1)); componentIsNotPeriodic("shift"+to_string(j-1));
-          addComponent("slide"+to_string(j-1)); componentIsNotPeriodic("slide"+to_string(j-1));
-          addComponent("rise"+to_string(j-1)); componentIsNotPeriodic("rise"+to_string(j-1));
+          addComponentWithDerivatives("shift"+to_string(j-1)); componentIsNotPeriodic("shift"+to_string(j-1));
+          addComponentWithDerivatives("slide"+to_string(j-1)); componentIsNotPeriodic("slide"+to_string(j-1));
+          addComponentWithDerivatives("rise"+to_string(j-1)); componentIsNotPeriodic("rise"+to_string(j-1));
         }
       }     
-      log.printf("crt-NA noder between ends %d, %d, %d and %d\n", ends[0].serial(),ends[1].serial(),ends[2].serial(),ends[3].serial());
+      log.printf("rbb-NA between ends %d, %d, %d and %d\n", ends[0].serial(),ends[1].serial(),ends[2].serial(),ends[3].serial());
       break;
     }
   }
@@ -521,7 +531,7 @@ crtNAnoder::crtNAnoder(const ActionOptions&ao):
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void crtNAnoder::fit(char type, vector<VectorGeneric<3>> atoms, VectorGeneric<3> *fit1, VectorGeneric<3> *fit2, VectorGeneric<3> *fit3) {
+void rbbNA::fit(char type, vector<VectorGeneric<3>> atoms, VectorGeneric<3> *fit1, VectorGeneric<3> *fit2, VectorGeneric<3> *fit3) {
   vector<VectorGeneric<3> > modelBaseCoords, T, eigenVectorsH, eigenVectorsK, Tt, TxTt, TtxT, R;
   VectorGeneric<3> eigenValues, eigenValuesDeSquared, fitAtom1, fitAtom2, fitAtom3;
   VectorGeneric<3> MC = Vector(0, 0, 0);
@@ -661,7 +671,7 @@ void crtNAnoder::fit(char type, vector<VectorGeneric<3>> atoms, VectorGeneric<3>
 }
 
 
-double crtNAnoder::Determinant3x3(vector< VectorGeneric<3> > Matrix){
+double rbbNA::Determinant3x3(vector< VectorGeneric<3> > Matrix){
   
   double D = Matrix[0][0]*Matrix[1][1]*Matrix[2][2] + Matrix[1][0]*Matrix[2][1]*Matrix[0][2] + Matrix[2][0]*Matrix[0][1]*Matrix[1][2];
   D -= Matrix[0][0]*Matrix[2][1]*Matrix[1][2] + Matrix[1][1]*Matrix[0][2]*Matrix[2][0] + Matrix[0][1]*Matrix[1][0]*Matrix[2][2];
@@ -669,7 +679,7 @@ double crtNAnoder::Determinant3x3(vector< VectorGeneric<3> > Matrix){
 }
 
 
-void crtNAnoder::EigenValsAndVectorsSymmetric(vector<VectorGeneric<3>> Matrix, VectorGeneric<3>* EigenValues, vector<VectorGeneric<3>>* EigenVectors){
+void rbbNA::EigenValsAndVectorsSymmetric(vector<VectorGeneric<3>> Matrix, VectorGeneric<3>* EigenValues, vector<VectorGeneric<3>>* EigenVectors){
   VectorGeneric<3> eigVals;
   double temp, p1, q, p2, p, r, phi;
   int i, j, k;
@@ -809,24 +819,30 @@ void crtNAnoder::EigenValsAndVectorsSymmetric(vector<VectorGeneric<3>> Matrix, V
 //helperfunctions
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-double crtNAnoder::Norm(VectorGeneric<3> vec){
+double rbbNA::Norm(VectorGeneric<3> vec){
   double norm = vec.modulo();
   return norm;
 }
 
-VectorGeneric<3> crtNAnoder::Normalize(VectorGeneric<3> vec){
+VectorGeneric<3> rbbNA::Normalize(VectorGeneric<3> vec){
   double norm = vec.modulo();
   VectorGeneric<3> normalized = vec/norm;
   return normalized;
 }
 
-VectorGeneric<3> crtNAnoder::AxisRotation(VectorGeneric<3> v, VectorGeneric<3> k, double theta){
+VectorGeneric<3> rbbNA::AxisRotation(VectorGeneric<3> v, VectorGeneric<3> k, double theta){
   VectorGeneric<3> vrot = v*cos(theta) + crossProduct(k,v)*sin(theta) + k*dotProduct(k,v)*(1-cos(theta));
   return vrot;
 }
 
+vector<VectorGeneric<3>> rbbNA::Skew(VectorGeneric<3> phi){
+  vector<VectorGeneric<3>> S(3, Vector(0,0,0));
+  S = {Vector(0, phi[2], -1*phi[1]), Vector(-1*phi[2], 0, phi[0]), Vector(phi[1], -1*phi[0], 0)};
 
-vector<VectorGeneric<3>> crtNAnoder::RotationMatrix(vector<VectorGeneric<3>> frame1, vector<VectorGeneric<3>> frame2){
+  return S;
+}
+
+vector<VectorGeneric<3>> rbbNA::RotationMatrix(vector<VectorGeneric<3>> frame1, vector<VectorGeneric<3>> frame2){
 
   vector<VectorGeneric<3>> Q(3, Vector(0,0,0));
   for(int i = 0; i<3; i++){
@@ -842,7 +858,7 @@ vector<VectorGeneric<3>> crtNAnoder::RotationMatrix(vector<VectorGeneric<3>> fra
   return Q;
 }
 
-VectorGeneric<3> crtNAnoder::RotationAxis(vector<VectorGeneric<3>> Q){
+VectorGeneric<3> rbbNA::RotationAxis(vector<VectorGeneric<3>> Q){
 
   VectorGeneric<3> axis;
   axis[0] = Q[1][2]-Q[2][1];
@@ -852,7 +868,7 @@ VectorGeneric<3> crtNAnoder::RotationAxis(vector<VectorGeneric<3>> Q){
   return axis;
 }
 
-double crtNAnoder::RotationAngle(vector<VectorGeneric<3>> Q){
+double rbbNA::RotationAngle(vector<VectorGeneric<3>> Q){
 
   double cost=(Q[0][0]+Q[1][1]+Q[2][2]-1)/2;
   if(-1>cost){cost = -0.99999999999999;}
@@ -862,7 +878,7 @@ double crtNAnoder::RotationAngle(vector<VectorGeneric<3>> Q){
   return theta;
 }
 
-VectorGeneric<3> crtNAnoder::RotationVector(vector<VectorGeneric<3>> Q){
+VectorGeneric<3> rbbNA::RotationVector(vector<VectorGeneric<3>> Q){
   VectorGeneric<3> Axis, axis;
   double theta;
 
@@ -873,7 +889,7 @@ VectorGeneric<3> crtNAnoder::RotationVector(vector<VectorGeneric<3>> Q){
   return theta*axis;
 }
 
-vector<VectorGeneric<3>> crtNAnoder::midFrame(vector<VectorGeneric<3>> frame1, VectorGeneric<3> RotationVector){
+vector<VectorGeneric<3>> rbbNA::midFrame(vector<VectorGeneric<3>> frame1, VectorGeneric<3> RotationVector){
   vector<VectorGeneric<3>> mid(3, Vector(0,0,0));
   double theta = RotationVector.modulo();
   VectorGeneric<3> axis = RotationVector/theta;
@@ -886,7 +902,7 @@ vector<VectorGeneric<3>> crtNAnoder::midFrame(vector<VectorGeneric<3>> frame1, V
   return mid;
 }
 
-vector<VectorGeneric<3>> crtNAnoder::BaseFrame(VectorGeneric<3> glycosidic, VectorGeneric<3> internal){
+vector<VectorGeneric<3>> rbbNA::BaseFrame(VectorGeneric<3> glycosidic, VectorGeneric<3> internal){
   vector<VectorGeneric<3>> frame(3, Vector(0,0,0));
   VectorGeneric<3> normalVector, longVector, shortVector, Gly, Int;
   double normnormal, normlong, normshort, normgly, normint;
@@ -913,7 +929,7 @@ vector<VectorGeneric<3>> crtNAnoder::BaseFrame(VectorGeneric<3> glycosidic, Vect
 
 }
 
-VectorGeneric<3> crtNAnoder::RefPoint(VectorGeneric<3> glycosidic, VectorGeneric<3> normal, VectorGeneric<3> nitrogen){
+VectorGeneric<3> rbbNA::RefPoint(VectorGeneric<3> glycosidic, VectorGeneric<3> normal, VectorGeneric<3> nitrogen){
   VectorGeneric<3> displacement, position;
 
   displacement = AxisRotation( glycosidic/glycosidic.modulo(), normal, 2.4691172928);
@@ -922,11 +938,180 @@ VectorGeneric<3> crtNAnoder::RefPoint(VectorGeneric<3> glycosidic, VectorGeneric
 
 }
 
+// Derivative function convention: deriv function does not take derivs as in put
+// name of function is D[Func_Name]D[Input] for derivative of [Func_Name] to [Input]
+// Output is given as an array of shape([Input])xshape([Func_Name])
+// Input is given as the Output of [Func_Name] followed by its Inputs (in the same order) 
+// all output is done directly (no refferencing)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// vector basics
+vector<VectorGeneric<3>> rbbNA::DNormalizeDvec(VectorGeneric<3> normedVec, VectorGeneric<3> vec){
+  double norm = vec.modulo() ;
+  VectorGeneric<3> derNormedx = (norm*Vector(1,0,0)-normedVec*vec[0])/(norm*norm);
+  VectorGeneric<3> derNormedy = (norm*Vector(0,1,0)-normedVec*vec[1])/(norm*norm);
+  VectorGeneric<3> derNormedz = (norm*Vector(0,0,1)-normedVec*vec[2])/(norm*norm);
+  vector<VectorGeneric<3>> derNormed = {derNormedx, derNormedy, derNormedz} ;
+
+  return derNormed;
+}
+
+VectorGeneric<3> rbbNA::DNormDvec(double norm, VectorGeneric<3> vec){
+  VectorGeneric<3> Der = Normalize(vec); 
+  return Der;  // D(sqrt(x**2+y**2+z**2))Dx = 2x/2sqrt(x**2+y**2+z**2) = x/sqrt(x**2+y**2+z**2)
+}
+
+// construction of axis angle
+
+vector<VectorGeneric<3>> rbbNA::DRotationAngleDQ(double theta, vector<VectorGeneric<3>> Q){
+  //calculation done from rotation matrix, angle axis correpondence
+  vector<VectorGeneric<3>> Ders(3, Vector(0,0,0));
+
+  for(int i =0; i<3; i++){
+    Ders[i][i] = -0.5/sin(theta);
+  }
+
+  return Ders;
+}
+
+vector<vector<VectorGeneric<3>>> rbbNA::DRotationAxisDQ(VectorGeneric<3> Axis, vector<VectorGeneric<3>> Q){
+  vector<VectorGeneric<3>> dummy33(3, Vector(0,0,0));
+  vector<vector<VectorGeneric<3>>> Ders(3, dummy33);
+
+  for(int i =0; i<3; i++){
+    Ders[(i+1)%3][(i+2)%3][i] = 1;
+    Ders[(i+2)%3][(i+1)%3][i] = -1;
+  }
+
+  return Ders;
+}
+
+vector<vector<VectorGeneric<3>>> rbbNA::DVectorDTransformation(VectorGeneric<3> RotationVector, vector<VectorGeneric<3>> Q){
+  int k, l, i, j;
+  double theta, sint, cost, cott;
+  VectorGeneric<3> Axis, axis;
+  vector<VectorGeneric<3>> Zero3x3(3, Vector(0,0,0)), daxisdAxis(3, Vector(0,0,0)), dthetadQ(3, Vector(0,0,0));
+
+  vector<vector<VectorGeneric<3>>> dAxisdQ(3, Zero3x3), dVectordQ(3, Zero3x3);
+  
+  Axis = RotationAxis(Q);
+  theta = RotationAngle(Q);
+  sint = sin(theta);
+  cost = cos(theta);
+  cott = cost/sint;
+
+  // Calculate derivatives
+  dAxisdQ = DRotationAxisDQ(Axis, Q);
+  dthetadQ = DRotationAngleDQ(theta, Q);
+
+  //resolve chian rule between for normalizing the axis
+
+  for( k = 0; k < 3; k++){
+    for( l = 0; l < 3; l++){
+      for( i = 0; i < 3; i++){
+        dVectordQ[k][l][i] += theta*dAxisdQ[k][l][i];
+      }
+    }
+  }
+
+  //resolve product rule for multiplying by theta
+
+  for( k = 0; k < 3; k++){
+    l=k;  // theta only has non zero derivatives with respect to the diagonal
+    for( i = 0; i < 3; i++){
+      dVectordQ[k][l][i] += (1-theta*cott)*dthetadQ[k][l]*Axis[i];
+    }
+  }
+
+
+  for( k = 0; k < 3; k++){
+    for( l = 0; l < 3; l++){
+      for( i = 0; i < 3; i++){
+          dVectordQ[k][l][i] = dVectordQ[k][l][i]/(2*sint);
+      }
+    }
+  }
+
+  return dVectordQ;
+}
+
+//Rotation matrices that are functions of frames derived with respect to rotations of those frames
+
+vector<vector<VectorGeneric<3>>> rbbNA::DTransformationDRot(vector<VectorGeneric<3>> frame1, vector<VectorGeneric<3>> frame2, double direction){
+  vector<VectorGeneric<3>> Sx(3, Vector(0,0,0)), Sy(3, Vector(0,0,0)), Sz(3, Vector(0,0,0)), dummy33(3, Vector(0,0,0)), DtransformDrotx(3, Vector(0,0,0)), DtransformDroty(3, Vector(0,0,0)), DtransformDrotz(3, Vector(0,0,0));
+  vector<VectorGeneric<3>> Sxframe1t(3, Vector(0,0,0)), Syframe1t(3, Vector(0,0,0)), Szframe1t(3, Vector(0,0,0));
+  vector<vector<VectorGeneric<3>>> DtransformDrotation(3, dummy33);
+
+  Sx = Skew(Vector(1, 0, 0));
+  Sy = Skew(Vector(0, 1, 0));
+  Sz = Skew(Vector(0, 0, 1));
+  
+  if (direction==-1){
+    for(int k = 0; k<3; k++){
+      for(int l = 0; l<3; l++){
+        for(int j =0; j<3; j++){
+          Sxframe1t[l][k] += Sx[j][k]*frame1[j][l];
+          Syframe1t[l][k] += Sy[j][k]*frame1[j][l];
+          Szframe1t[l][k] += Sz[j][k]*frame1[j][l];
+        }
+      }
+    }
+  }else if(direction==1){
+    for(int k = 0; k<3; k++){
+      for(int l = 0; l<3; l++){
+        for(int j = 0; j<3; j++){
+          Sxframe1t[l][k] += Sx[k][j]*frame1[j][l];
+          Syframe1t[l][k] += Sy[k][j]*frame1[j][l];
+          Szframe1t[l][k] += Sz[k][j]*frame1[j][l];
+        }
+      }
+    }
+  }
+
+
+  for(int k = 0; k<3; k++){
+    for(int l = 0; l<3; l++){
+      for(int j = 0; j<3; j++){
+        DtransformDrotx[k][l] +=  frame2[j][l]*Sxframe1t[k][j];
+        DtransformDroty[k][l] +=  frame2[j][l]*Syframe1t[k][j];
+        DtransformDrotz[k][l] +=  frame2[j][l]*Szframe1t[k][j];
+      }
+    }
+  }
+
+  DtransformDrotation = {DtransformDrotx, DtransformDroty, DtransformDrotz};
+
+  return DtransformDrotation;
+}
+
+vector<vector<VectorGeneric<3>>> rbbNA::DMidDRot(vector<VectorGeneric<3>>  midFrame){
+  vector<VectorGeneric<3>> Sx(3, Vector(0,0,0)), Sy(3, Vector(0,0,0)), Sz(3, Vector(0,0,0)), DmidDrotx(3, Vector(0,0,0)), DmidDroty(3, Vector(0,0,0)), DmidDrotz(3, Vector(0,0,0));
+  vector<VectorGeneric<3>> dummy33(3, Vector(0,0,0)), SxM(3, Vector(0,0,0)), SyM(3, Vector(0,0,0)), SzM(3, Vector(0,0,0)), MtSxM(3, Vector(0,0,0)), MtSyM(3, Vector(0,0,0)), MtSzM(3, Vector(0,0,0));
+  vector<vector<VectorGeneric<3>>> DmidDrotation(3, dummy33);
+
+  Sx = Skew(Vector(1, 0, 0));
+  Sy = Skew(Vector(0, 1, 0));
+  Sz = Skew(Vector(0, 0, 1));
+  
+  for(int k = 0; k<3; k++){
+    for(int l = 0; l<3; l++){
+      for(int j = 0; j<3; j++){
+        DmidDrotx[k][l] += 0.5*midFrame[j][l]*Sx[k][j];
+        DmidDroty[k][l] += 0.5*midFrame[j][l]*Sy[k][j];
+        DmidDrotz[k][l] += 0.5*midFrame[j][l]*Sz[k][j];
+      }
+    }
+  }
+  DmidDrotation = {DmidDrotx, DmidDroty, DmidDrotz};
+
+  return DmidDrotation;
+}
 
 //actual calculation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void crtNAnoder::calculate(){
+void rbbNA::calculate(){
 
 
  // pbc handling
@@ -957,7 +1142,7 @@ void crtNAnoder::calculate(){
 
 
  // check if Base completion is used or input is done giving the three relevent atoms alone
-  bool BASECOMPLETION = (FITTED or (crtNAnoder::INPUTMODE==sequence));
+  bool BASECOMPLETION = (FITTED or (rbbNA::INPUTMODE==sequence));
   if(BASECOMPLETION){
     purineAtoms = 10;
     pyrimidineAtoms = 7;
@@ -970,10 +1155,12 @@ void crtNAnoder::calculate(){
  // initialize containers for information regarding the bases
 
   VectorGeneric<3> glycosidic, internal;  // important intermediate variables to get to the base frames
+  double basemass;
 
   vector<int> AtomsInBase(nbases, 0);
+  vector<vector<double>> AtomsMasses(nbases, Zero10);
   vector<VectorGeneric<3>> BaseRefs(nbases, Vector(0, 0, 0)), BaseCenter(nbases, Vector(0, 0, 0));
-  vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
+  vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), BaseRedefsBase(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
 
  //
 
@@ -985,17 +1172,21 @@ void crtNAnoder::calculate(){
       case('A'): {
         AtomsInBase[base]=purineAtoms;
         AtomsBases[base].resize(purineAtoms);
+        AtomsMasses[base].resize(purineAtoms);
 
         for (n = 0; n < purineAtoms; n++) {
           AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
           N++;
         }
 
         AtomsInBase[base+1]=pyrimidineAtoms;
         AtomsBases[base+1].resize(pyrimidineAtoms);
+        AtomsMasses[base+1].resize(pyrimidineAtoms);
 
         for (n = 0; n < pyrimidineAtoms; n++) {
           AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
           N++;
         }
 
@@ -1005,17 +1196,21 @@ void crtNAnoder::calculate(){
       case('C'): {
         AtomsInBase[base]=pyrimidineAtoms;
         AtomsBases[base].resize(pyrimidineAtoms);
+        AtomsMasses[base].resize(pyrimidineAtoms);
 
         for (n = 0; n < pyrimidineAtoms; n++) {
           AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
           N++;
         }
 
         AtomsInBase[base+1]=purineAtoms;
         AtomsBases[base+1].resize(purineAtoms);
+        AtomsMasses[base+1].resize(purineAtoms);
 
         for (n = 0; n < purineAtoms; n++) {
           AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
           N++;
         }
 
@@ -1025,17 +1220,21 @@ void crtNAnoder::calculate(){
       case('G'): {
         AtomsInBase[base]=purineAtoms;
         AtomsBases[base].resize(purineAtoms);
+        AtomsMasses[base].resize(purineAtoms);
 
         for (n = 0; n < purineAtoms; n++) {
           AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
           N++;
         }
 
         AtomsInBase[base+1]=pyrimidineAtoms;
         AtomsBases[base+1].resize(pyrimidineAtoms);
+        AtomsMasses[base+1].resize(pyrimidineAtoms);
 
         for (n = 0; n < pyrimidineAtoms; n++) {
           AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
           N++;
         }
 
@@ -1045,17 +1244,21 @@ void crtNAnoder::calculate(){
       case('T'): {
         AtomsInBase[base]=pyrimidineAtoms;
         AtomsBases[base].resize(pyrimidineAtoms);
+        AtomsMasses[base].resize(pyrimidineAtoms);
 
         for (n = 0; n < pyrimidineAtoms; n++) {
           AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
           N++;
         }
 
         AtomsInBase[base+1]=purineAtoms;
         AtomsBases[base+1].resize(purineAtoms);
+        AtomsMasses[base+1].resize(purineAtoms);
 
         for (n = 0; n < purineAtoms; n++) {
           AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
           N++;
         }
 
@@ -1065,17 +1268,21 @@ void crtNAnoder::calculate(){
       case('U'): {
         AtomsInBase[base]=pyrimidineAtoms;
         AtomsBases[base].resize(pyrimidineAtoms);
+        AtomsMasses[base].resize(pyrimidineAtoms);
 
         for (n = 0; n < pyrimidineAtoms; n++) {
           AtomsBases[base][n] = getPosition(N);
+          AtomsMasses[base][n] = getMass(N);
           N++;
         }
 
         AtomsInBase[base+1]=purineAtoms;
         AtomsBases[base+1].resize(purineAtoms);
+        AtomsMasses[base+1].resize(purineAtoms);
 
         for (n = 0; n < purineAtoms; n++) {
           AtomsBases[base + 1][n] = getPosition(N);
+          AtomsMasses[base + 1][n] = getMass(N);
           N++;
         }
 
@@ -1110,12 +1317,28 @@ void crtNAnoder::calculate(){
       Baseframes[base][2] = -1*Baseframes[base][2]; //making the tangents of opposing bases point in the same direction
       Baseframes[base][1] = -1*Baseframes[base][1]; //also making the e2 vectors (connecting backbones) not point against but "with" each other
     }
+    //define atoms as function of frame
+
+    BaseCenter[base] = Vector(0, 0, 0);
+    basemass=0;
+    for(n=0;n<AtomsInBase[base];n++){
+      BaseCenter[base] += AtomsMasses[base][n]*AtomsBases[base][n];
+      basemass += AtomsMasses[base][n];
+    }
+    BaseCenter[base] = BaseCenter[base]/basemass;
+        
+    BaseRedefsBase[base].resize(AtomsInBase[base]);
+    for(n=0;n<AtomsInBase[base];n++){
+      for(i=0;i<3;i++){
+        BaseRedefsBase[base][n][i] = dotProduct(AtomsBases[base][n]-BaseCenter[base], Baseframes[base][i]);  // for future reference we calculate the position of the atoms in the base frame
+      }
+    }
 
   }
  //    
       
 
-  switch(crtNAnoder::INPUTMODE){
+  switch(rbbNA::INPUTMODE){
 
  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  ///////////////////////////////////////////Pair//////////////////////////////////////////////////////////////////////////////////////// 
@@ -1126,22 +1349,52 @@ void crtNAnoder::calculate(){
       vector<VectorGeneric<3>> Pairframe = Zero3x3, TransformationMatrixPair = Zero3x3;
       VectorGeneric<3> RotationvectorPair = Vector(0, 0, 0), pairTranslation = Vector(0, 0, 0);
 
-      
+      // derivatives of Pair and step mids and rotations to underlying baseframe rotations
+      vector<vector<VectorGeneric<3>>> DRotationVectorDPairTransformation(3, Zero3x3);
+      vector<vector<VectorGeneric<3>>> DRotationVectorDPairRotation(2, Zero3x3);
+      vector<vector<vector<VectorGeneric<3>>>> DPairTransformationDRotation(2,Zero3x3x3), DPairMidDRotation(2,Zero3x3x3);
+
+      // derivatives used in producing ders to atoms
+      vector<VectorGeneric<3>> DbuckleDBaseRot(2, Vector(0, 0, 0)), DpropellerDBaseRot(2, Vector(0, 0, 0)), DopeningDBaseRot(2, Vector(0, 0, 0));
+      vector<vector<VectorGeneric<3>>> DbuckleDbaseframe(2, Zero3x3), DpropellerDbaseframe(2, Zero3x3), DopeningDbaseframe(2, Zero3x3);
+
+      // output ders
+      VectorGeneric<3>  DbuckleDatom, DpropellerDatom, DopeningDatom;
+
       // output vars
       double buckle, propeller, opening, shear, stretch, stagger;
       //output pointers
       Value* valuebuckle; Value* valuepropeller; Value* valueopening;
       Value* valueshear; Value* valuestretch; Value* valuestagger;
 
-      //calculate
+     //
 
       TransformationMatrixPair = RotationMatrix(Baseframes[0], Baseframes[1]);  // the rotation matrix that transforms the left base to the right (given in the lab frame)
       RotationvectorPair = RotationVector(TransformationMatrixPair); // convert the rotation to axis angle representation
       Pairframe = midFrame(Baseframes[0], RotationvectorPair); // find the frame halfway between the two base frames
       pairTranslation = BaseRefs[1]-BaseRefs[0];  // Calculate the translation vector between the bases
 
+      //bookkeepderivatives
 
-      // final calculation
+      DRotationVectorDPairTransformation = DVectorDTransformation(RotationvectorPair, TransformationMatrixPair); // calculate the derivative from transforming the matrix into axis angle
+
+      for(base=0;base<2;base++){
+        DPairTransformationDRotation[base] = DTransformationDRot(Baseframes[0], Baseframes[1], pow(-1.0,base+1)); // calculate the derivative of the transformation to rotations of the base frames
+
+        for(i=0;i<3;i++){
+          for(x=0;x<3;x++){
+            for(k=0;k<3;k++){
+              for(l=0;l<3;l++){
+                DRotationVectorDPairRotation[base][x][i] += DPairTransformationDRotation[base][x][k][l]*DRotationVectorDPairTransformation[k][l][i];  //this is the derivative of a vector (axis-angle) to rotations of the base frames through the chain rule
+              }
+            }
+          }
+        }
+
+        DPairMidDRotation[base] = DMidDRot(Pairframe); // get the derivative of the midframe to baseframe rotations
+      }
+
+      // final calculation and output
 
       buckle = dotProduct(RotationvectorPair,Pairframe[0]);
       propeller = dotProduct(RotationvectorPair,Pairframe[1]);
@@ -1151,8 +1404,6 @@ void crtNAnoder::calculate(){
       stretch = dotProduct(pairTranslation,Pairframe[1]);
       stagger = dotProduct(pairTranslation,Pairframe[2]);
 
-
-      // output handling
       valuebuckle=getPntrToComponent("buckle");
       valuepropeller=getPntrToComponent("propeller");
       valueopening=getPntrToComponent("opening");
@@ -1170,6 +1421,71 @@ void crtNAnoder::calculate(){
       valuestretch->set(stretch); 
       valuestagger->set(stagger);
 
+      // derivatives finalization
+
+      N=0;
+
+      for(base=0;base<2;base++){
+
+        for(x=0;x<3;x++){
+          DbuckleDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][0]); 
+          DbuckleDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[0]);
+
+          DpropellerDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][1]);
+          DpropellerDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[1]);
+
+          DopeningDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][2]);
+          DopeningDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[2]);
+        }
+
+
+        VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+        for(n=0;n<AtomsInBase[base];n++){
+          for(x=0;x<3;x++){
+            InertiaRedef[x] += AtomsMasses[base][n]*(pow(BaseRedefsBase[base][n][(x+1)%3],2) + pow(BaseRedefsBase[base][n][(x+2)%3],2));
+          }
+        }   
+
+        for(x=0;x<3;x++){
+          DbuckleDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DbuckleDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DbuckleDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DpropellerDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DpropellerDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DpropellerDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DopeningDbaseframe[base][x] = Baseframes[base][(x+2)%3]*DopeningDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[base][(x+1)%3]*DopeningDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+        }
+
+      // derivatives output
+
+        for(n=0;n<AtomsInBase[base];n++){ // small n keeps track of the index within the base
+          DbuckleDatom = Vector(0,0,0);
+          DpropellerDatom = Vector(0,0,0);
+          DopeningDatom = Vector(0,0,0);
+
+          if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+            for(x=0;x<3;x++){
+              DbuckleDatom += DbuckleDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+              DpropellerDatom += DpropellerDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+              DopeningDatom += DopeningDbaseframe[base][x]*BaseRedefsBase[base][n][x]*AtomsMasses[base][n];
+            }
+            
+            // now the derivatives of atom N can be outputted
+            setAtomsDerivatives(valuebuckle,N,DbuckleDatom);  
+            setAtomsDerivatives(valuepropeller,N,DpropellerDatom);
+            setAtomsDerivatives(valueopening,N,DopeningDatom);
+          }else{
+            setAtomsDerivatives(valuebuckle,N,Vector(0,0,0));  
+            setAtomsDerivatives(valuepropeller,N,Vector(0,0,0));
+            setAtomsDerivatives(valueopening,N,Vector(0,0,0));
+          }
+
+           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+          setAtomsDerivatives(valueshear,N,pow(-1,base)*Pairframe[0]);
+          setAtomsDerivatives(valuestretch,N,pow(-1,base)*Pairframe[1]);
+          setAtomsDerivatives(valuestagger,N,pow(-1,base)*Pairframe[2]);
+           
+          N++;  // large N is the overall index in the atom list
+        }
+      }
+
       break;
     }
  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1177,9 +1493,12 @@ void crtNAnoder::calculate(){
     case(step):{  // to be redone (simplified) from Sequence mode
       //initialize
       int pair;  // counters
+      int pairmass;
 
       double tilt, roll, twist, shift, slide, rise;  // output Steps
       // information related to bases
+      vector<vector<VectorGeneric<3>>> PairRedefsPair(2, Zero3x3);
+      vector<vector<double>> AtomsMassesPair(2, Zero10);
       vector<int> AtomsInPair(2,0);
 
       // information on Pairs and Steps
@@ -1187,16 +1506,65 @@ void crtNAnoder::calculate(){
       vector<VectorGeneric<3>> Stepframe(3, Vector(0, 0, 0)), TransformationMatrixStep(3, Vector(0, 0, 0)), PairCenter(2, Vector(0, 0, 0)), RotationvectorPair(2, Vector(0, 0, 0));
       VectorGeneric<3> RotationvectorStep = Vector(0, 0, 0) ; VectorGeneric<3> stepTranslations = Vector(0, 0, 0) ;
 
+      // derivatives of Pair and step mids and rotations to underlying baseframe rotations
+      vector<vector<VectorGeneric<3>>> DRotationVectorDStepTransformation(3, Zero3x3);
+     
+      vector<vector<VectorGeneric<3>>> DRotationVectorDStepRotation(2, Zero3x3);
+
+      vector<vector<vector<VectorGeneric<3>>>> DStepTransformationDRotation(2,Zero3x3x3), DStepMidDRotation(2,Zero3x3x3);
+
+      // derivatives giving torques on the base frame
+      vector<VectorGeneric<3>> DtiltDPairRot(2, Vector(0, 0, 0)), DrollDPairRot(2, Vector(0, 0, 0)), DtwistDPairRot(2, Vector(0, 0, 0));
+
+      // derivatives used to transfer torques on the base frame in to forces
+      vector<vector<VectorGeneric<3>>> DtiltDpairframe(2, Zero3x3), DrollDpairframe(2, Zero3x3), DtwistDpairframe(2, Zero3x3);
+
+      // output derivatives
+      VectorGeneric<3>  DtiltDatom, DrollDatom, DtwistDatom;
+
+     //
       
      // initialize pointers for output
       Value* valuetilt;Value* valueroll;Value* valuetwist;
       Value* valueshift;Value* valueslide;Value* valuerise;
 
-     //calculate
+
       for(pair=0;pair<2;pair++){ //input of loop is two base frames, output are the rotation and translation vector between them and their mid frame, appropriate derivatives are also set
         TransformationMatrixPair[pair] = RotationMatrix(Baseframes[2*pair], Baseframes[2*pair+1]);  // the rotation matrix that transforms the left base to the right (given in the lab frame)
         RotationvectorPair[pair] = RotationVector(TransformationMatrixPair[pair]); // convert the rotation to axis angle representation
         Pairframes[pair] = midFrame(Baseframes[2*pair], RotationvectorPair[pair]); // find the frame halfway between the two base frames
+        
+        //bookkeepderivatives
+
+        PairCenter[pair] = Vector(0, 0, 0);
+
+        pairmass=0;
+        for(n=0;n<AtomsInBase[2*pair];n++){
+          PairCenter[pair] += AtomsMasses[2*pair][n]*AtomsBases[2*pair][n];
+          pairmass += AtomsMasses[2*pair][n];
+        }
+        for(n=0;n<AtomsInBase[2*pair+1];n++){
+          PairCenter[pair] += AtomsMasses[2*pair+1][n]*AtomsBases[2*pair+1][n];
+          pairmass += AtomsMasses[2*pair+1][n];
+        }
+
+        PairCenter[pair] = PairCenter[pair]/pairmass;
+
+        PairRedefsPair[pair].resize(AtomsInBase[2*pair]+AtomsInBase[2*pair+1]);
+        AtomsMassesPair[pair].resize(AtomsInBase[2*pair]+AtomsInBase[2*pair+1]); 
+        N=0;
+        
+        for(base=0;base<2;base++){ 
+          for(n=0;n<AtomsInBase[2*pair+base];n++){
+            for(i=0;i<3;i++){
+              PairRedefsPair[pair][N][i] = dotProduct(AtomsBases[2*pair+base][n]-PairCenter[pair],  Pairframes[pair][i]);  // for future reference we calculate the position of the atoms in the base frame
+            }
+            AtomsMassesPair[pair][N] = AtomsMasses[2*pair+base][n];
+            N++;
+          }
+
+        }
+        AtomsInPair[pair]=N;
       }
    
       TransformationMatrixStep = RotationMatrix(Pairframes[0], Pairframes[1]);
@@ -1204,7 +1572,27 @@ void crtNAnoder::calculate(){
       Stepframe = midFrame(Pairframes[0], RotationvectorStep);
       stepTranslations = 0.5*(BaseRefs[2]+BaseRefs[3] - BaseRefs[0]-BaseRefs[1]);
 
-     //final calculation
+        //bookkeepderivatives
+
+      DRotationVectorDStepTransformation = DVectorDTransformation(RotationvectorStep, TransformationMatrixStep);
+
+      for(pair=0;pair<2;pair++){
+        DStepTransformationDRotation[pair]=DTransformationDRot(Pairframes[0], Pairframes[1], pow(-1.0,pair+1));  //
+
+        for(i=0;i<3;i++){
+          for(x=0;x<3;x++){
+            for(k=0;k<3;k++){
+              for(l=0;l<3;l++){
+                DRotationVectorDStepRotation[pair][x][i] += DStepTransformationDRotation[pair][x][k][l]*DRotationVectorDStepTransformation[k][l][i];
+              }
+            }
+          }
+        }
+
+        DStepMidDRotation[pair] = DMidDRot(Stepframe); // 
+      
+      }
+      //
 
       tilt = dotProduct(RotationvectorStep,Stepframe[0]);
       roll = dotProduct(RotationvectorStep,Stepframe[1]);
@@ -1214,7 +1602,7 @@ void crtNAnoder::calculate(){
       slide = dotProduct(stepTranslations,Stepframe[1]);
       rise = dotProduct(stepTranslations,Stepframe[2]);
     
-     //output
+    
       valuetilt=getPntrToComponent("tilt");
       valueroll=getPntrToComponent("roll");
       valuetwist=getPntrToComponent("twist");
@@ -1231,6 +1619,79 @@ void crtNAnoder::calculate(){
       valueslide->set(slide); 
       valuerise->set(rise);
       	
+      N=0; //set atom counter equal to the first atom in this step
+        
+      for(pair=0;pair<2;pair++){
+// chnge pairs form here on
+        for(x=0;x<3;x++){
+            // 0.5 factors included because of doubling that occured in calculating the derivatives of step frames
+          DtiltDPairRot[pair][x] =  dotProduct( RotationvectorStep, DStepMidDRotation[pair][x][0]); 
+          DtiltDPairRot[pair][x] += dotProduct( DRotationVectorDStepRotation[pair][x], Stepframe[0]);
+
+          DrollDPairRot[pair][x] =  dotProduct( RotationvectorStep, DStepMidDRotation[pair][x][1]);
+          DrollDPairRot[pair][x] += dotProduct( DRotationVectorDStepRotation[pair][x], Stepframe[1]);
+
+          DtwistDPairRot[pair][x] =  dotProduct( RotationvectorStep, DStepMidDRotation[pair][x][2]);
+          DtwistDPairRot[pair][x] += dotProduct( DRotationVectorDStepRotation[pair][x], Stepframe[2]);
+        }
+
+          //invert atom definition
+        VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+        for(n=0;n<AtomsInPair[pair];n++){
+          for(x=0;x<3;x++){
+            InertiaRedef[x] += AtomsMassesPair[pair][n]*(pow(PairRedefsPair[pair][n][(x+1)%3],2) + pow(PairRedefsPair[pair][n][(x+2)%3],2));
+          }
+        }   
+
+        for(x=0;x<3;x++){
+          DtiltDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtiltDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtiltDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DrollDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DrollDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DrollDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DtwistDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtwistDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtwistDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+        }
+
+
+        for(n=0;n<AtomsInPair[pair];n++){ // small n keeps track of the index within the base
+          DtiltDatom = Vector(0,0,0);
+          DrollDatom = Vector(0,0,0);
+          DtwistDatom = Vector(0,0,0);
+          if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+            for(x=0;x<3;x++){
+              DtiltDatom += DtiltDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
+              DrollDatom += DrollDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
+              DtwistDatom += DtwistDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
+            }
+              
+            // now the derivatives of atom N can be outputted
+            setAtomsDerivatives(valuetilt,N,DtiltDatom);
+            setAtomsDerivatives(valueroll,N,DrollDatom);
+            setAtomsDerivatives(valuetwist,N,DtwistDatom);
+
+          }else{
+            //If no fitting was done derivatives past n==3 give 0
+            setAtomsDerivatives(valuetilt,N,Vector(0,0,0));  
+            setAtomsDerivatives(valueroll,N,Vector(0,0,0));
+            setAtomsDerivatives(valuetwist,N,Vector(0,0,0));
+          }
+
+          // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
+           
+          if(base<2){
+            setAtomsDerivatives(valueshift,N,-1*Stepframe[0]);
+            setAtomsDerivatives(valueslide,N,-1*Stepframe[1]);  
+            setAtomsDerivatives(valuerise,N,-1*Stepframe[2]);
+            //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
+          }else{
+            setAtomsDerivatives(valueshift,N,Stepframe[0]);
+            setAtomsDerivatives(valueslide,N,Stepframe[1]);
+            setAtomsDerivatives(valuerise,N,Stepframe[2]);
+          }
+            N++;  // large N is the overall index in the atom list
+        }
+
+      }
+      
+
       break;
     }
  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1256,6 +1717,26 @@ void crtNAnoder::calculate(){
       // information on Pairs and Steps
       vector<vector<VectorGeneric<3>>> Pairframes(npairs, Zero3x3), Stepframes(nsteps, Zero3x3), TransformationMatrixPair(npairs, Zero3x3), TransformationMatrixStep(nsteps, Zero3x3);
       vector<VectorGeneric<3>> RotationvectorPair(npairs, Vector(0, 0, 0)), pairTranslations(npairs, Vector(0, 0, 0)), RotationvectorStep(nsteps, Vector(0, 0, 0)), stepTranslations(nsteps, Vector(0, 0, 0));
+
+      // derivatives of Pair and step mids and rotations to underlying baseframe rotations
+      vector<vector<vector<VectorGeneric<3>>>> DRotationVectorDPairTransformation(npairs, Zero3x3x3), DRotationVectorDStepTransformation(nsteps, Zero3x3x3);
+     
+      vector<vector<vector<VectorGeneric<3>>>> DRotationVectorDPairRotation(npairs, Zero2x3x3);
+      vector<vector<vector<vector<VectorGeneric<3>>>>> DRotationVectorDStepRotation(nsteps, Zero2x2x3x3);
+
+      vector<vector<vector<vector<VectorGeneric<3>>>>> DPairTransformationDRotation(npairs,Zero2x3x3x3), DPairMidDRotation(npairs,Zero2x3x3x3);
+      vector<vector<vector<vector<vector<VectorGeneric<3>>>>>> DStepTransformationDRotation(nsteps,Zero2x2x3x3x3), DStepMidDRotation(nsteps,Zero2x2x3x3x3);
+
+      // derivatives giving torques on the bqse frame
+      vector<VectorGeneric<3>> DtiltDBaseRot(4, Vector(0, 0, 0)), DrollDBaseRot(4, Vector(0, 0, 0)), DtwistDBaseRot(4, Vector(0, 0, 0));
+      vector<VectorGeneric<3>> DbuckleDBaseRot(2, Vector(0, 0, 0)), DpropellerDBaseRot(2, Vector(0, 0, 0)), DopeningDBaseRot(2, Vector(0, 0, 0));
+
+      // derivatives used to transfer torques on the base frame in to forces
+      vector<vector<VectorGeneric<3>>> DtiltDbaseframe(4, Zero3x3), DrollDbaseframe(4, Zero3x3), DtwistDbaseframe(4, Zero3x3);
+      vector<vector<VectorGeneric<3>>> DbuckleDbaseframe(2, Zero3x3), DpropellerDbaseframe(2, Zero3x3), DopeningDbaseframe(2, Zero3x3);
+
+      // output derivatives
+      VectorGeneric<3>  DtiltDatom, DrollDatom, DtwistDatom, DbuckleDatom, DpropellerDatom, DopeningDatom;
 
      //
       
@@ -1295,6 +1776,29 @@ void crtNAnoder::calculate(){
         RotationvectorPair[pair] = RotationVector(TransformationMatrixPair[pair]); // convert the rotation to axis angle representation
         Pairframes[pair] = midFrame(Baseframes[2*pair], RotationvectorPair[pair]); // find the frame halfway between the two base frames
         pairTranslations[pair] = BaseRefs[2*pair+1]-BaseRefs[2*pair];  // Calculate the translation vector between the bases
+
+        //bookkeepderivatives
+
+        DRotationVectorDPairTransformation[pair] = DVectorDTransformation(RotationvectorPair[pair], TransformationMatrixPair[pair]); // calculate the derivative from transforming the matrix into axis angle
+
+        for(base=0;base<2;base++){
+          DPairTransformationDRotation[pair][base] = DTransformationDRot(Baseframes[2*pair], Baseframes[2*pair+1], pow(-1.0,base+1)); // calculate the derivative of the transformation to rotations of the base frames
+
+          for(i=0;i<3;i++){
+            for(x=0;x<3;x++){
+              for(k=0;k<3;k++){
+                for(l=0;l<3;l++){
+                  DRotationVectorDPairRotation[pair][base][x][i] += DPairTransformationDRotation[pair][base][x][k][l]*DRotationVectorDPairTransformation[pair][k][l][i];  //this is the derivative of a vector (axis-angle) to rotations of the base frames through the chain rule
+                }
+              }
+            }
+          }
+
+          DPairMidDRotation[pair][base] = DMidDRot(Pairframes[pair]); // get the derivative of the midframe to baseframe rotations
+
+          //setup relative atom positions
+        }
+
       }
    
   
@@ -1303,6 +1807,29 @@ void crtNAnoder::calculate(){
         RotationvectorStep[step] = RotationVector(TransformationMatrixStep[step]);
         Stepframes[step] = midFrame(Pairframes[step], RotationvectorStep[step]);
         stepTranslations[step] = 0.5*(BaseRefs[2*step+2]+BaseRefs[2*step+3] - BaseRefs[2*step]-BaseRefs[2*step+1]);
+
+        //bookkeepderivatives
+
+        DRotationVectorDStepTransformation[step] = DVectorDTransformation(RotationvectorStep[step], TransformationMatrixStep[step]);
+        for(pair=0;pair<2;pair++){
+          for(base=0;base<2;base++){
+
+            DStepTransformationDRotation[step][pair][base]=DTransformationDRot(Pairframes[step], Pairframes[step+1], pow(-1.0,pair+1));  // note this is double what it should be
+
+            for(i=0;i<3;i++){
+              for(x=0;x<3;x++){
+                for(k=0;k<3;k++){
+                  for(l=0;l<3;l++){
+                    DRotationVectorDStepRotation[step][pair][base][x][i] += DStepTransformationDRotation[step][pair][base][x][k][l]*DRotationVectorDStepTransformation[step][k][l][i];
+                  }
+                }
+              }
+            }
+
+            DStepMidDRotation[step][pair][base] = DMidDRot(Stepframes[step]); // note this is double what it should be
+        
+          }
+        }
       }
 
      // calculate parameters
@@ -1329,7 +1856,10 @@ void crtNAnoder::calculate(){
       }
       
      //
-     //   output handling
+     // bookkeepderivatives and outputting them
+
+      N=0;  //counter of the atoms within the step
+      M=0;  //counter of atoms that are before the step
 
       for(step=0;step<nsteps;step++){      
       	valuestilt[step]=getPntrToComponent("tilt"+to_string(step));
@@ -1347,7 +1877,108 @@ void crtNAnoder::calculate(){
         valuesshift[step]->set(shift[step]);         
         valuesslide[step]->set(slide[step]); 
         valuesrise[step]->set(rise[step]);
+      	
+        N=M; //set atom counter equal to the first atom in this step
+        
+       //now the derivatives of the parameters of this step are defined for all atoms
+        for(n=0;n<M;n++){//atoms before the step give derivative 0
+          setAtomsDerivatives(valuestilt[step],N,Vector(0,0,0));  
+          setAtomsDerivatives(valuesroll[step],N,Vector(0,0,0));
+          setAtomsDerivatives(valuestwist[step],N,Vector(0,0,0));
+        // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+          setAtomsDerivatives(valuesshift[step],N,Vector(0,0,0));
+          setAtomsDerivatives(valuesslide[step],N,Vector(0,0,0));
+          setAtomsDerivatives(valuesrise[step],N,Vector(0,0,0));       
+        }
+        
+        for(base=0;base<4;base++){
+          if(base<2){pair=0;}else{pair=1;}
+
+          for(x=0;x<3;x++){
+            // 0.5 factors included because of doubling that occured in calculating the derivatives of step frames
+            DtiltDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][0]);
+            DtiltDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][0]);
+
+            DrollDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][1]);
+            DrollDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][1]);
+
+            DtwistDBaseRot[base][x] =  0.5*dotProduct( RotationvectorStep[step], DStepMidDRotation[step][pair][base%2][x][2]);
+            DtwistDBaseRot[base][x] += 0.5*dotProduct( DRotationVectorDStepRotation[step][pair][base%2][x], Stepframes[step][2]);
+          }
+
+          //invert atom definition
+          VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+          for(n=0;n<AtomsInBase[2*step+base];n++){
+            if(FITTED or n<3){
+              for(x=0;x<3;x++){
+                InertiaRedef[x] += AtomsMasses[2*step+base][n]*(pow(BaseRedefsBase[2*step+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*step+base][n][(x+2)%3],2));
+              }
+            }
+          }   
+
+          for(x=0;x<3;x++){
+            DtiltDbaseframe[base][x] = Baseframes[2*step+base][(x+2)%3]*DtiltDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*step+base][(x+1)%3]*DtiltDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DrollDbaseframe[base][x] = Baseframes[2*step+base][(x+2)%3]*DrollDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*step+base][(x+1)%3]*DrollDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DtwistDbaseframe[base][x] = Baseframes[2*step+base][(x+2)%3]*DtwistDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*step+base][(x+1)%3]*DtwistDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          }
+
+
+          for(n=0;n<AtomsInBase[2*step+base];n++){ // small n keeps track of the index within the base
+            DtiltDatom = Vector(0,0,0);
+            DrollDatom = Vector(0,0,0);
+            DtwistDatom = Vector(0,0,0);
+            if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+              for(x=0;x<3;x++){
+                DtiltDatom += DtiltDbaseframe[base][x]*BaseRedefsBase[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DrollDatom += DrollDbaseframe[base][x]*BaseRedefsBase[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+                DtwistDatom += DtwistDbaseframe[base][x]*BaseRedefsBase[2*step+base][n][x]*AtomsMasses[2*step+base][n];
+              }
+              
+              // now the derivatives of atom N can be outputted
+              setAtomsDerivatives(valuestilt[step],N,DtiltDatom);
+              setAtomsDerivatives(valuesroll[step],N,DrollDatom);
+              setAtomsDerivatives(valuestwist[step],N,DtwistDatom);
+
+            }else{
+              //If no fitting was done derivatives past n==3 give 0
+              setAtomsDerivatives(valuestilt[step],N,Vector(0,0,0));  
+              setAtomsDerivatives(valuesroll[step],N,Vector(0,0,0));
+              setAtomsDerivatives(valuestwist[step],N,Vector(0,0,0));
+            }
+
+            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
+           
+            if(base<2){
+              setAtomsDerivatives(valuesshift[step],N,-1*Stepframes[step][0]);
+              setAtomsDerivatives(valuesslide[step],N,-1*Stepframes[step][1]);
+              setAtomsDerivatives(valuesrise[step],N,-1*Stepframes[step][2]);
+              M++;  //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
+            }else{
+              setAtomsDerivatives(valuesshift[step],N,Stepframes[step][0]);
+              setAtomsDerivatives(valuesslide[step],N,Stepframes[step][1]);
+              setAtomsDerivatives(valuesrise[step],N,Stepframes[step][2]);
+            }
+            N++;  // large N is the overall index in the atom list
+          }
+
+        }
+
+        for(n=N;n<natoms;n++){//atoms after the step give derivative 0
+          setAtomsDerivatives(valuestilt[step],n,Vector(0,0,0));  
+          setAtomsDerivatives(valuesroll[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuestwist[step],n,Vector(0,0,0));
+
+        // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+          setAtomsDerivatives(valuesshift[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesslide[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesrise[step],n,Vector(0,0,0));       
+        }
+      
       }
+
+      N=0;  //counter of the atoms within the pairs
+      M=0;  //counter of the atoms that are before the pairs
 
       for(pair=0;pair<npairs;pair++){
         valuesbuckle[pair]=getPntrToComponent("buckle"+to_string(pair));
@@ -1366,6 +1997,91 @@ void crtNAnoder::calculate(){
         valuesshear[pair]->set(shear[pair]); 
         valuesstretch[pair]->set(stretch[pair]); 
         valuesstagger[pair]->set(stagger[pair]);
+
+        N=M;
+
+        for(n=0;n<M;n++){//atoms before the step give derivative 0
+          setAtomsDerivatives(valuesbuckle[pair],n,Vector(0,0,0));  
+          setAtomsDerivatives(valuespropeller[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesopening[pair],n,Vector(0,0,0));
+
+          // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+          setAtomsDerivatives(valuesshear[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesstretch[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesstagger[pair],n,Vector(0,0,0));      
+        }
+       
+        for(base=0;base<2;base++){
+
+          for(x=0;x<3;x++){
+            DbuckleDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][0]); 
+            DbuckleDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][0]);
+
+            DpropellerDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][1]);
+            DpropellerDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][1]);
+
+            DopeningDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][2]);
+            DopeningDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][2]);
+          }
+
+
+          VectorGeneric<3> InertiaRedef = Vector(0.0,0.0,0.0);
+          for(n=0;n<AtomsInBase[2*pair+base];n++){
+            if(FITTED or n<3){
+              for(x=0;x<3;x++){
+                InertiaRedef[x] += AtomsMasses[2*pair+base][n]*(pow(BaseRedefsBase[2*pair+base][n][(x+1)%3],2) + pow(BaseRedefsBase[2*pair+base][n][(x+2)%3],2));
+              }
+            }
+          }   
+
+          for(x=0;x<3;x++){
+            DbuckleDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DbuckleDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DbuckleDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DpropellerDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DpropellerDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DpropellerDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+            DopeningDbaseframe[base][x] = Baseframes[2*pair+base][(x+2)%3]*DopeningDBaseRot[base][(x+1)%3]/InertiaRedef[(x+1)%3] - Baseframes[2*pair+base][(x+1)%3]*DopeningDBaseRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          }
+
+
+          for(n=0;n<AtomsInBase[2*pair+base];n++){ // small n keeps track of the index within the base
+            DbuckleDatom = Vector(0,0,0);
+            DpropellerDatom = Vector(0,0,0);
+            DopeningDatom = Vector(0,0,0);
+            if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
+
+              for(x=0;x<3;x++){
+                DbuckleDatom += DbuckleDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DpropellerDatom += DpropellerDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+                DopeningDatom += DopeningDbaseframe[base][x]*BaseRedefsBase[2*pair+base][n][x]*AtomsMasses[2*pair+base][n];
+              }
+            
+             // now the derivatives of atom N can be outputted
+              setAtomsDerivatives(valuesbuckle[pair],N,DbuckleDatom);  
+              setAtomsDerivatives(valuespropeller[pair],N,DpropellerDatom);
+              setAtomsDerivatives(valuesopening[pair],N,DopeningDatom);
+            }else{
+              setAtomsDerivatives(valuesbuckle[pair],N,Vector(0,0,0));  
+              setAtomsDerivatives(valuespropeller[pair],N,Vector(0,0,0));
+              setAtomsDerivatives(valuesopening[pair],N,Vector(0,0,0));
+            }
+
+           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+            setAtomsDerivatives(valuesshear[pair],N,pow(-1,base)*Pairframes[pair][0]);
+            setAtomsDerivatives(valuesstretch[pair],N,pow(-1,base)*Pairframes[pair][1]);
+            setAtomsDerivatives(valuesstagger[pair],N,pow(-1,base)*Pairframes[pair][2]);
+           
+            N++;  // large N is the overall index in the atom list
+          }
+        }
+        
+        for(n=N;n<natoms;n++){//atoms after the step give derivative 0
+          setAtomsDerivatives(valuesbuckle[pair],n,Vector(0,0,0));  
+          setAtomsDerivatives(valuespropeller[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesopening[pair],n,Vector(0,0,0));
+
+          // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
+          setAtomsDerivatives(valuesshear[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesstretch[pair],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesstagger[pair],n,Vector(0,0,0));       
+        }
        
       }
 
