@@ -2,12 +2,12 @@
 
 controlfile=PlumedStretchControl.dat
 step=200
-for i in {1..10}
+for i in {0..10}
 do
 	k=$(python3 -c "print(${i}*${step})" )
-	echo '# SETTINGS MOLFILE=1bna.pdb'> $controlfile
+	echo '# SETTINGS MOLFILE=../InitialData/1bna.pdb'> $controlfile
 	echo '# vim:ft=plumed'>> $controlfile
-	echo 'MOLINFO STRUCTURE=1bna.pdb'>> $controlfile
+	echo 'MOLINFO STRUCTURE=../InitialData/1bna.pdb'>> $controlfile
 	echo 'var: RBBNA ENDS=167,199,546,578 FITTED SEQUENCE=AT'>> $controlfile
 	echo 'par: RBBNANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
 	echo 'Restraint: RESTRAINT ARG=var.stretch0 KAPPA='$k' AT=0.0'>> $controlfile
@@ -26,12 +26,12 @@ do
 
 	if [ $i -eq 0 ]
 	then
-		gmx grompp -o DDD_StretchHold$k.tpr -p ../control/topol.top -f ../control/md_100ps.mdp -c ../control/npt.gro -t ../control/npt.cpt -r ../control/npt.gro
+		gmx grompp -o DDD_StretchHold$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c ../InitialData/npt.gro -t ../InitialData/npt.cpt -r ../InitialData/npt.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_StretchHold$k -v
 	else
 		let prev=$i-1
 		l=$(python3 -c "print($prev*$step)")
-		gmx grompp -o DDD_StretchHold$k.tpr -p ../control/topol.top -f ../control/md_100ps.mdp -c DDD_StretchHold$l.gro -t DDD_StretchHold$l.cpt -r DDD_StretchHold$l.gro
+		gmx grompp -o DDD_StretchHold$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c DDD_StretchHold$l.gro -t DDD_StretchHold$l.cpt -r DDD_StretchHold$l.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_StretchHold$k -v
 	fi
 done

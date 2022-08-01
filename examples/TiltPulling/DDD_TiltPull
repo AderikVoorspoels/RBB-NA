@@ -6,9 +6,9 @@ kappa=500
 for i in {0..25}
 do
 	k=$(python3 -c "print(${i}*${step})" )
-	echo '# SETTINGS MOLFILE=1bna.pdb'> $controlfile
+	echo '# SETTINGS MOLFILE=../InitialData/1bna.pdb'> $controlfile
 	echo '# vim:ft=plumed'>> $controlfile
-	echo 'MOLINFO STRUCTURE=1bna.pdb'>> $controlfile
+	echo 'MOLINFO STRUCTURE=../InitialData/1bna.pdb'>> $controlfile
 	echo 'var: RBBNA ENDS=167,199,546,578 FITTED SEQUENCE=AT'>> $controlfile
 	echo 'par: RBBNANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
 	echo 'Restraint: RESTRAINT ARG=var.tilt0 KAPPA='$kappa' AT='$k''>> $controlfile
@@ -27,12 +27,12 @@ do
 
 	if [ $i -eq 0 ]
 	then
-		gmx grompp -o DDD_TiltAt$k.tpr -p topol.top -f ../control/md_100ps.mdp -c npt.gro -t npt.cpt -r npt.gro
+		gmx grompp -o DDD_TiltAt$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c ../InitialData/npt.gro -t ../InitialData/npt.cpt -r ../InitialData/npt.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_TiltAt$k -v
 	else
 		let prev=$i-1
 		l=$(python3 -c "print($prev*$step)")
-		gmx grompp -o DDD_TiltAt$k.tpr -p topol.top -f ../control/md_100ps.mdp -c DDD_TiltAt$l.gro -t DDD_TiltAt$l.cpt -r DDD_TiltAt$l.gro
+		gmx grompp -o DDD_TiltAt$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c DDD_TiltAt$l.gro -t DDD_TiltAt$l.cpt -r DDD_TiltAt$l.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_TiltAt$k -v
 	fi
 done

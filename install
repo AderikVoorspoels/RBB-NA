@@ -57,8 +57,8 @@ then
 	exit 1
 fi
 
-cp crtNA.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNA.cpp
-cp crtNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNAnoder.cpp
+cp rbbNA.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNA.cpp
+cp rbbNAnoder.cpp ${PLUMEDDIRECTORY}/src/colvar/rbbNAnoder.cpp
 
 # if requested install plumed
 

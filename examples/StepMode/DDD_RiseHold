@@ -5,9 +5,9 @@ step=200
 for i in {1..10}
 do
 	k=$(python3 -c "print(${i}*${step})" )
-	echo '# SETTINGS MOLFILE=1bna.pdb'> $controlfile
+	echo '# SETTINGS MOLFILE=../InitialData/1bna.pdb'> $controlfile
 	echo '# vim:ft=plumed'>> $controlfile
-	echo 'MOLINFO STRUCTURE=1bna.pdb'>> $controlfile
+	echo 'MOLINFO STRUCTURE=../InitialData/1bna.pdb'>> $controlfile
 	echo 'var: RBBNA BASE1=167 BASE3=199 BASE4=546 BASE2=578 FITTED SEQUENCE=AT'>> $controlfile
 	echo 'par: RBBNANODER ENDS=9,356,388,735 FITTED SEQUENCE=CGCGAATTCGCG'>> $controlfile
 	echo 'Restraint: RESTRAINT ARG=var.rise0 KAPPA='$k' AT=0.34'>> $controlfile
@@ -26,12 +26,12 @@ do
 
 	if [ $i -eq 0 ]
 	then
-		gmx grompp -o DDD_RiseHold$k.tpr -p ../control/topol.top -f ../control/md_100ps.mdp -c ../control/npt.gro -t ../control/npt.cpt -r ../control/npt.gro
+		gmx grompp -o DDD_RiseHold$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c ../InitialData/npt.gro -t ../InitialData/npt.cpt -r ../InitialData/npt.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_RiseHold$k -v
 	else
 		let prev=$i-1
 		l=$(python3 -c "print($prev*$step)")
-		gmx grompp -o DDD_RiseHold$k.tpr -p ../control/topol.top -f ../control/md_100ps.mdp -c DDD_RiseHold$l.gro -t DDD_RiseHold$l.cpt -r DDD_RiseHold$l.gro
+		gmx grompp -o DDD_RiseHold$k.tpr -p ../InitialData/topol.top -f ../Control/md_100ps.mdp -c DDD_RiseHold$l.gro -t DDD_RiseHold$l.cpt -r DDD_RiseHold$l.gro
 		gmx mdrun -plumed $controlfile -deffnm DDD_RiseHold$k -v
 	fi
 done
