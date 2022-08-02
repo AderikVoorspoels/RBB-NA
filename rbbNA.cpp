@@ -2064,9 +2064,9 @@ void rbbNA::calculate(){
             }
 
            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-            setAtomsDerivatives(valuesshear[pair],N,pow(-1,base)*Pairframes[pair][0]);
-            setAtomsDerivatives(valuesstretch[pair],N,pow(-1,base)*Pairframes[pair][1]);
-            setAtomsDerivatives(valuesstagger[pair],N,pow(-1,base)*Pairframes[pair][2]);
+            setAtomsDerivatives(valuesshear[pair],N,pow(-1,base+1)*Pairframes[pair][0]);
+            setAtomsDerivatives(valuesstretch[pair],N,pow(-1,base+1)*Pairframes[pair][1]);
+            setAtomsDerivatives(valuesstagger[pair],N,pow(-1,base+1)*Pairframes[pair][2]);
            
             N++;  // large N is the overall index in the atom list
           }

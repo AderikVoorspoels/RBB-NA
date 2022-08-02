@@ -13,6 +13,7 @@
 *.log
 *#
 *mdout.mdp
+*step*
 
 # Avoid pushing the result of analysis on output#
 ################################################
