@@ -519,7 +519,7 @@ rbbNA::rbbNA(const ActionOptions&ao):
 
   log.printf("  %d Atoms will be used\n", atoms.size());
 
-  log.printf("  version is 19.July.22 [fixed name]\n");
+  log.printf("  version is 5.August.22 [step mode check base refrence exchanged for pair]\n");
 
   //get the atoms, then calculation can start
 
@@ -1478,9 +1478,9 @@ void rbbNA::calculate(){
           }
 
            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-          setAtomsDerivatives(valueshear,N,pow(-1,base)*Pairframe[0]);
-          setAtomsDerivatives(valuestretch,N,pow(-1,base)*Pairframe[1]);
-          setAtomsDerivatives(valuestagger,N,pow(-1,base)*Pairframe[2]);
+          setAtomsDerivatives(valueshear,N,pow(-1,base+1)*Pairframe[0]);
+          setAtomsDerivatives(valuestretch,N,pow(-1,base+1)*Pairframe[1]);
+          setAtomsDerivatives(valuestagger,N,pow(-1,base+1)*Pairframe[2]);
            
           N++;  // large N is the overall index in the atom list
         }
@@ -1676,17 +1676,11 @@ void rbbNA::calculate(){
 
           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
            
-          if(base<2){
-            setAtomsDerivatives(valueshift,N,-1*Stepframe[0]);
-            setAtomsDerivatives(valueslide,N,-1*Stepframe[1]);  
-            setAtomsDerivatives(valuerise,N,-1*Stepframe[2]);
+          setAtomsDerivatives(valueshift,N,pow(-1,pair+1)*Stepframe[0]);
+          setAtomsDerivatives(valueslide,N,pow(-1,pair+1)*Stepframe[1]);  
+          setAtomsDerivatives(valuerise,N,pow(-1,pair+1)*Stepframe[2]);
             //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
-          }else{
-            setAtomsDerivatives(valueshift,N,Stepframe[0]);
-            setAtomsDerivatives(valueslide,N,Stepframe[1]);
-            setAtomsDerivatives(valuerise,N,Stepframe[2]);
-          }
-            N++;  // large N is the overall index in the atom list
+          N++;  // large N is the overall index in the atom list
         }
 
       }
@@ -1950,14 +1944,14 @@ void rbbNA::calculate(){
             // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
            
             if(base<2){
-              setAtomsDerivatives(valuesshift[step],N,-1*Stepframes[step][0]);
-              setAtomsDerivatives(valuesslide[step],N,-1*Stepframes[step][1]);
-              setAtomsDerivatives(valuesrise[step],N,-1*Stepframes[step][2]);
-              M++;  //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
-            }else{
               setAtomsDerivatives(valuesshift[step],N,Stepframes[step][0]);
               setAtomsDerivatives(valuesslide[step],N,Stepframes[step][1]);
               setAtomsDerivatives(valuesrise[step],N,Stepframes[step][2]);
+              M++;  //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
+            }else{
+              setAtomsDerivatives(valuesshift[step],N,-1*Stepframes[step][0]);
+              setAtomsDerivatives(valuesslide[step],N,-1*Stepframes[step][1]);
+              setAtomsDerivatives(valuesrise[step],N,-1*Stepframes[step][2]);
             }
             N++;  // large N is the overall index in the atom list
           }

@@ -13,7 +13,7 @@ stiffnesses = []
 fig, axs = plt.subplots(2,2, figsize=(20,20))
 
 for k in range(0, steps+1, 1):
-	i = dk*k
+	i = dx*k
 	PlumedPropeller=np.loadtxt('DDD_PropellerAt'+str(i)+'_Propeller.dat')
 	axs[0,0].plot(PlumedPropeller[::10,0], PlumedPropeller[::10,pos]*180/pi, label=str(i))
 	stiffnesses.append(1/np.var(PlumedPropeller[:,pos]))

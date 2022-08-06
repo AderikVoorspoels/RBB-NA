@@ -5,7 +5,7 @@ import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
 from math import *
 a = 0.34
-dk = 100
+dk = 200
 steps = 10
 pos = 6
 stiffnesses = []
