@@ -1,8 +1,6 @@
 # RBB-NA
 Rigid-Base-Biassing-for-Nucleic-Acids
 
-NOTICE: THIS IS STIL UNDER ACTIVE DEVELOPMENT, MAJOR CHANGES CONTINUE TO BE MADE
-
 RBB-NA is a tool for the real time analysis and control of Rigid Base parameters during simulation
 It is developped to work during Gromacs simulation as a part of plumed
 
