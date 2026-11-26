@@ -35,6 +35,17 @@ using namespace std;
 namespace PLMD {
 namespace colvar {
 
+// unit conversion for the model base coordinates used in fit(), which are given in Angstrom
+static const double ANGSTROMTONM = 0.1;
+
+// Sign convention for the intra-base-pair parameters (buckle, propeller, opening,
+// shear, stretch, stagger). Internally the pair transformation is computed from the
+// strand-I base to the strand-II base, which is the reverse of Curves+/3DNA (Tsukuba).
+// Reversing it negates the rotation vector and translation while leaving the pair
+// mid-frame (and hence all step parameters) unchanged, so multiplying the six
+// intra-pair components and their derivatives by -1 yields the Curves+ convention.
+static const double INTRAPAIRSIGN = -1.0;
+
 //+PLUMEDOC rbbNAnoder
 /*
 This file provides a template for if you want to introduce a new CV.
@@ -354,7 +365,7 @@ rbbNAnoder::rbbNAnoder(const ActionOptions&ao):
           }
       }else{
           for (b = 0; b < 4; b++) {
-              if (!(atomsBases[b].size() == 1)) {
+              if (!(atomsBases[b].size() == 3)) {
                   error("number of atoms in base" + to_string(b + 1) +
                         " should be 3 (C'1, N1/N9 ,C2/C4) if you want to specify without fitting.");
               }
@@ -653,9 +664,10 @@ void rbbNAnoder::fit(char type, vector<VectorGeneric<3>> atoms, VectorGeneric<3>
     fitAtom3[i] = R[0][i]*modelBaseCoords[2][0] + R[1][i]*modelBaseCoords[2][1] + R[2][i]*modelBaseCoords[2][2]; // rotate the model C4 or C2 (=2) base to be as close as possible to the simulation atom
   }
 
-  *fit1=(fitAtom1+MC);
-  *fit2=(fitAtom2+MC);
-  *fit3=(fitAtom3+MC);
+  // the model base coordinates are in Angstrom, positions in nm: convert the fitted offsets before placing them on the centroid
+  *fit1=(ANGSTROMTONM*fitAtom1+MC);
+  *fit2=(ANGSTROMTONM*fitAtom2+MC);
+  *fit3=(ANGSTROMTONM*fitAtom3+MC);
 
   return;
 }
@@ -979,117 +991,25 @@ void rbbNAnoder::calculate(){
 
  // collect the atoms and all needed info on them
   N=0;
-  for(base=0;base<(nbases-1);base=base+2){ // for all pairs in the DNA chain check the first base, second base should be complementary
-    switch(BASES[base]){  //statements to load the required atoms depinding on the sequence provided
+  for(base=0;base<nbases;base++){ // load the atoms of every base
+    // with base completion purines carry 10 atoms and pyrimidines 7; without it the 3 atoms given in the input are used
+    // (the type of every base is used on its own, so no complementarity is assumed and untyped (modified) bases work without fitting)
+    if(BASECOMPLETION){
+      AtomsInBase[base] = (BASES[base]=='A' || BASES[base]=='G') ? purineAtoms : pyrimidineAtoms;
+    }else{
+      AtomsInBase[base] = 3;
+    }
+    AtomsBases[base].resize(AtomsInBase[base]);
 
-      case('A'): {
-        AtomsInBase[base]=purineAtoms;
-        AtomsBases[base].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=pyrimidineAtoms;
-        AtomsBases[base+1].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('C'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('G'): {
-        AtomsInBase[base]=purineAtoms;
-        AtomsBases[base].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=pyrimidineAtoms;
-        AtomsBases[base+1].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('T'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('U'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          N++;
-        }
-
-        break;
-      }
+    for (n = 0; n < AtomsInBase[base]; n++) {
+      AtomsBases[base][n] = getPosition(N);
+      N++;
     }
 
     if(FITTED){  // if fitting was requested fit every base and return the three relavant positions for the construction of the base frames
       fit(BASES[base], AtomsBases[base], &refAtoms[base][0], &refAtoms[base][1], &refAtoms[base][2]);
-      fit(BASES[base+1], AtomsBases[base+1], &refAtoms[base+1][0], &refAtoms[base+1][1], &refAtoms[base+1][2]);
-          
     }else{  // if no fitting was requested the first three atoms give the relevant positions for constructing the frames
       refAtoms[base] = {AtomsBases[base][0],AtomsBases[base][1],AtomsBases[base][2]};
-      refAtoms[base+1] = {AtomsBases[base+1][0],AtomsBases[base+1][1],AtomsBases[base+1][2]};
     }
   }
   natoms = N; //identify the total number of atoms used
@@ -1103,7 +1023,7 @@ void rbbNAnoder::calculate(){
     internal=delta(refAtoms[base][1],refAtoms[base][2]);  // get the internal bond used in frame construction
         
     Baseframes[base] = BaseFrame(glycosidic, internal);  // construct the base frame
-    BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], AtomsBases[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
+    BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], refAtoms[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
 
 
     if((base%2) == 1){  // deal with the 3'->5', 5'->3' anti-symmetry making the tangents of opposing bases point in the same direction()
@@ -1143,13 +1063,13 @@ void rbbNAnoder::calculate(){
 
       // final calculation
 
-      buckle = dotProduct(RotationvectorPair,Pairframe[0]);
-      propeller = dotProduct(RotationvectorPair,Pairframe[1]);
-      opening = dotProduct(RotationvectorPair,Pairframe[2]);
+      buckle = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[0]);
+      propeller = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[1]);
+      opening = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[2]);
 
-      shear = dotProduct(pairTranslation,Pairframe[0]);
-      stretch = dotProduct(pairTranslation,Pairframe[1]);
-      stagger = dotProduct(pairTranslation,Pairframe[2]);
+      shear = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[0]);
+      stretch = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[1]);
+      stagger = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[2]);
 
 
       // output handling
@@ -1308,13 +1228,13 @@ void rbbNAnoder::calculate(){
      // calculate parameters
  
       for(pair=0;pair<npairs;pair++){
-        buckle[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
-        propeller[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
-        opening[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
+        buckle[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
+        propeller[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
+        opening[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
 
-        shear[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][0]);
-        stretch[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][1]);
-        stagger[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][2]);
+        shear[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][0]);
+        stretch[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][1]);
+        stagger[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][2]);
       }
 
       
