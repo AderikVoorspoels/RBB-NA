@@ -35,6 +35,14 @@ using namespace std;
 namespace PLMD {
 namespace colvar {
 
+// Sign convention for the intra-base-pair parameters (buckle, propeller, opening,
+// shear, stretch, stagger). Internally the pair transformation is computed from the
+// strand-I base to the strand-II base, which is the reverse of Curves+/3DNA (Tsukuba).
+// Reversing it negates the rotation vector and translation while leaving the pair
+// mid-frame (and hence all step parameters) unchanged, so multiplying the six
+// intra-pair components and their derivatives by -1 yields the Curves+ convention.
+static const double INTRAPAIRSIGN = -1.0;
+
 //+PLUMEDOC rbbNAnoder
 /*
 This file provides a template for if you want to introduce a new CV.
@@ -1143,13 +1151,13 @@ void rbbNAnoder::calculate(){
 
       // final calculation
 
-      buckle = dotProduct(RotationvectorPair,Pairframe[0]);
-      propeller = dotProduct(RotationvectorPair,Pairframe[1]);
-      opening = dotProduct(RotationvectorPair,Pairframe[2]);
+      buckle = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[0]);
+      propeller = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[1]);
+      opening = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[2]);
 
-      shear = dotProduct(pairTranslation,Pairframe[0]);
-      stretch = dotProduct(pairTranslation,Pairframe[1]);
-      stagger = dotProduct(pairTranslation,Pairframe[2]);
+      shear = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[0]);
+      stretch = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[1]);
+      stagger = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[2]);
 
 
       // output handling
@@ -1308,13 +1316,13 @@ void rbbNAnoder::calculate(){
      // calculate parameters
  
       for(pair=0;pair<npairs;pair++){
-        buckle[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
-        propeller[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
-        opening[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
+        buckle[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
+        propeller[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
+        opening[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
 
-        shear[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][0]);
-        stretch[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][1]);
-        stagger[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][2]);
+        shear[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][0]);
+        stretch[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][1]);
+        stagger[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][2]);
       }
 
       

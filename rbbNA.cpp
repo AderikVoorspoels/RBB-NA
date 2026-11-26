@@ -35,6 +35,14 @@ using namespace std;
 namespace PLMD {
 namespace colvar {
 
+// Sign convention for the intra-base-pair parameters (buckle, propeller, opening,
+// shear, stretch, stagger). Internally the pair transformation is computed from the
+// strand-I base to the strand-II base, which is the reverse of Curves+/3DNA (Tsukuba).
+// Reversing it negates the rotation vector and translation while leaving the pair
+// mid-frame (and hence all step parameters) unchanged, so multiplying the six
+// intra-pair components and their derivatives by -1 yields the Curves+ convention.
+static const double INTRAPAIRSIGN = -1.0;
+
 //+PLUMEDOC RBBNA
 /*
 This file provides a template for if you want to introduce a new CV.
@@ -1396,13 +1404,13 @@ void rbbNA::calculate(){
 
       // final calculation and output
 
-      buckle = dotProduct(RotationvectorPair,Pairframe[0]);
-      propeller = dotProduct(RotationvectorPair,Pairframe[1]);
-      opening = dotProduct(RotationvectorPair,Pairframe[2]);
+      buckle = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[0]);
+      propeller = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[1]);
+      opening = INTRAPAIRSIGN*dotProduct(RotationvectorPair,Pairframe[2]);
 
-      shear = dotProduct(pairTranslation,Pairframe[0]);
-      stretch = dotProduct(pairTranslation,Pairframe[1]);
-      stagger = dotProduct(pairTranslation,Pairframe[2]);
+      shear = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[0]);
+      stretch = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[1]);
+      stagger = INTRAPAIRSIGN*dotProduct(pairTranslation,Pairframe[2]);
 
       valuebuckle=getPntrToComponent("buckle");
       valuepropeller=getPntrToComponent("propeller");
@@ -1428,14 +1436,14 @@ void rbbNA::calculate(){
       for(base=0;base<2;base++){
 
         for(x=0;x<3;x++){
-          DbuckleDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][0]); 
-          DbuckleDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[0]);
+          DbuckleDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair, DPairMidDRotation[base][x][0]); 
+          DbuckleDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[0]);
 
-          DpropellerDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][1]);
-          DpropellerDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[1]);
+          DpropellerDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair, DPairMidDRotation[base][x][1]);
+          DpropellerDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[1]);
 
-          DopeningDBaseRot[base][x] =  dotProduct( RotationvectorPair, DPairMidDRotation[base][x][2]);
-          DopeningDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[2]);
+          DopeningDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair, DPairMidDRotation[base][x][2]);
+          DopeningDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[base][x], Pairframe[2]);
         }
 
 
@@ -1478,9 +1486,9 @@ void rbbNA::calculate(){
           }
 
            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-          setAtomsDerivatives(valueshear,N,pow(-1,base+1)*Pairframe[0]);
-          setAtomsDerivatives(valuestretch,N,pow(-1,base+1)*Pairframe[1]);
-          setAtomsDerivatives(valuestagger,N,pow(-1,base+1)*Pairframe[2]);
+          setAtomsDerivatives(valueshear,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[0]);
+          setAtomsDerivatives(valuestretch,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[1]);
+          setAtomsDerivatives(valuestagger,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[2]);
            
           N++;  // large N is the overall index in the atom list
         }
@@ -1829,13 +1837,13 @@ void rbbNA::calculate(){
      // calculate parameters
  
       for(pair=0;pair<npairs;pair++){
-        buckle[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
-        propeller[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
-        opening[pair] = dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
+        buckle[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][0]);
+        propeller[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][1]);
+        opening[pair] = INTRAPAIRSIGN*dotProduct(RotationvectorPair[pair],Pairframes[pair][2]);
 
-        shear[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][0]);
-        stretch[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][1]);
-        stagger[pair] = dotProduct(pairTranslations[pair],Pairframes[pair][2]);
+        shear[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][0]);
+        stretch[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][1]);
+        stagger[pair] = INTRAPAIRSIGN*dotProduct(pairTranslations[pair],Pairframes[pair][2]);
       }
 
       
@@ -2008,14 +2016,14 @@ void rbbNA::calculate(){
         for(base=0;base<2;base++){
 
           for(x=0;x<3;x++){
-            DbuckleDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][0]); 
-            DbuckleDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][0]);
+            DbuckleDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][0]); 
+            DbuckleDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][0]);
 
-            DpropellerDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][1]);
-            DpropellerDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][1]);
+            DpropellerDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][1]);
+            DpropellerDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][1]);
 
-            DopeningDBaseRot[base][x] =  dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][2]);
-            DopeningDBaseRot[base][x] += dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][2]);
+            DopeningDBaseRot[base][x] = INTRAPAIRSIGN*dotProduct( RotationvectorPair[pair], DPairMidDRotation[pair][base][x][2]);
+            DopeningDBaseRot[base][x] += INTRAPAIRSIGN*dotProduct( DRotationVectorDPairRotation[pair][base][x], Pairframes[pair][2]);
           }
 
 
@@ -2058,9 +2066,9 @@ void rbbNA::calculate(){
             }
 
            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-            setAtomsDerivatives(valuesshear[pair],N,pow(-1,base+1)*Pairframes[pair][0]);
-            setAtomsDerivatives(valuesstretch[pair],N,pow(-1,base+1)*Pairframes[pair][1]);
-            setAtomsDerivatives(valuesstagger[pair],N,pow(-1,base+1)*Pairframes[pair][2]);
+            setAtomsDerivatives(valuesshear[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][0]);
+            setAtomsDerivatives(valuesstretch[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][1]);
+            setAtomsDerivatives(valuesstagger[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][2]);
            
             N++;  // large N is the overall index in the atom list
           }
