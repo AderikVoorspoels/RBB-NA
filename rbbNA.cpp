@@ -372,7 +372,7 @@ rbbNA::rbbNA(const ActionOptions&ao):
           }
       }else{
           for (b = 0; b < 4; b++) {
-              if (!(atomsBases[b].size() == 1)) {
+              if (!(atomsBases[b].size() == 3)) {
                   error("number of atoms in base" + to_string(b + 1) +
                         " should be 3 (C'1, N1/N9 ,C2/C4) if you want to specify without fitting.");
               }
@@ -1168,143 +1168,34 @@ void rbbNA::calculate(){
   vector<int> AtomsInBase(nbases, 0);
   vector<vector<double>> AtomsMasses(nbases, Zero10);
   vector<VectorGeneric<3>> BaseRefs(nbases, Vector(0, 0, 0)), BaseCenter(nbases, Vector(0, 0, 0));
+  vector<double> BaseMass(nbases, 0.0);  // mass of the rigid body of each base (the atoms defining its frame)
   vector<vector<VectorGeneric<3>>> AtomsBases(nbases, Zero10x3), refAtoms(nbases, Zero3x3), BaseRedefsBase(nbases, Zero3x3), Baseframes(nbases, Zero3x3);
 
  //
 
  // collect the atoms and all needed info on them
   N=0;
-  for(base=0;base<(nbases-1);base=base+2){ // for all pairs in the DNA chain check the first base, second base should be complementary
-    switch(BASES[base]){  //statements to load the required atoms depinding on the sequence provided
+  for(base=0;base<nbases;base++){ // load the atoms of every base
+    // with base completion purines carry 10 atoms and pyrimidines 7; without it the 3 atoms given in the input are used
+    // (the type of every base is used on its own, so no complementarity is assumed and untyped (modified) bases work without fitting)
+    if(BASECOMPLETION){
+      AtomsInBase[base] = (BASES[base]=='A' || BASES[base]=='G') ? purineAtoms : pyrimidineAtoms;
+    }else{
+      AtomsInBase[base] = 3;
+    }
+    AtomsBases[base].resize(AtomsInBase[base]);
+    AtomsMasses[base].resize(AtomsInBase[base]);
 
-      case('A'): {
-        AtomsInBase[base]=purineAtoms;
-        AtomsBases[base].resize(purineAtoms);
-        AtomsMasses[base].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          AtomsMasses[base][n] = getMass(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=pyrimidineAtoms;
-        AtomsBases[base+1].resize(pyrimidineAtoms);
-        AtomsMasses[base+1].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          AtomsMasses[base + 1][n] = getMass(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('C'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-        AtomsMasses[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          AtomsMasses[base][n] = getMass(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-        AtomsMasses[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          AtomsMasses[base + 1][n] = getMass(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('G'): {
-        AtomsInBase[base]=purineAtoms;
-        AtomsBases[base].resize(purineAtoms);
-        AtomsMasses[base].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          AtomsMasses[base][n] = getMass(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=pyrimidineAtoms;
-        AtomsBases[base+1].resize(pyrimidineAtoms);
-        AtomsMasses[base+1].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          AtomsMasses[base + 1][n] = getMass(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('T'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-        AtomsMasses[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          AtomsMasses[base][n] = getMass(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-        AtomsMasses[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          AtomsMasses[base + 1][n] = getMass(N);
-          N++;
-        }
-
-        break;
-      }
-
-      case('U'): {
-        AtomsInBase[base]=pyrimidineAtoms;
-        AtomsBases[base].resize(pyrimidineAtoms);
-        AtomsMasses[base].resize(pyrimidineAtoms);
-
-        for (n = 0; n < pyrimidineAtoms; n++) {
-          AtomsBases[base][n] = getPosition(N);
-          AtomsMasses[base][n] = getMass(N);
-          N++;
-        }
-
-        AtomsInBase[base+1]=purineAtoms;
-        AtomsBases[base+1].resize(purineAtoms);
-        AtomsMasses[base+1].resize(purineAtoms);
-
-        for (n = 0; n < purineAtoms; n++) {
-          AtomsBases[base + 1][n] = getPosition(N);
-          AtomsMasses[base + 1][n] = getMass(N);
-          N++;
-        }
-
-        break;
-      }
+    for (n = 0; n < AtomsInBase[base]; n++) {
+      AtomsBases[base][n] = getPosition(N);
+      AtomsMasses[base][n] = getMass(N);
+      N++;
     }
 
     if(FITTED){  // if fitting was requested fit every base and return the three relavant positions for the construction of the base frames
       fit(BASES[base], AtomsBases[base], &refAtoms[base][0], &refAtoms[base][1], &refAtoms[base][2]);
-      fit(BASES[base+1], AtomsBases[base+1], &refAtoms[base+1][0], &refAtoms[base+1][1], &refAtoms[base+1][2]);
-          
     }else{  // if no fitting was requested the first three atoms give the relevant positions for constructing the frames
       refAtoms[base] = {AtomsBases[base][0],AtomsBases[base][1],AtomsBases[base][2]};
-      refAtoms[base+1] = {AtomsBases[base+1][0],AtomsBases[base+1][1],AtomsBases[base+1][2]};
     }
   }
   natoms = N; //identify the total number of atoms used
@@ -1327,13 +1218,18 @@ void rbbNA::calculate(){
     }
     //define atoms as function of frame
 
+    // the rigid body of a base consists of the atoms that define its frame: all base atoms when fitting, otherwise the first three
+    // its centre of mass and mass are used to distribute torques and forces over these atoms
     BaseCenter[base] = Vector(0, 0, 0);
     basemass=0;
     for(n=0;n<AtomsInBase[base];n++){
-      BaseCenter[base] += AtomsMasses[base][n]*AtomsBases[base][n];
-      basemass += AtomsMasses[base][n];
+      if(FITTED or n<3){
+        BaseCenter[base] += AtomsMasses[base][n]*AtomsBases[base][n];
+        basemass += AtomsMasses[base][n];
+      }
     }
     BaseCenter[base] = BaseCenter[base]/basemass;
+    BaseMass[base] = basemass;
         
     BaseRedefsBase[base].resize(AtomsInBase[base]);
     for(n=0;n<AtomsInBase[base];n++){
@@ -1485,14 +1381,24 @@ void rbbNA::calculate(){
             setAtomsDerivatives(valueopening,N,Vector(0,0,0));
           }
 
-           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-          setAtomsDerivatives(valueshear,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[0]);
-          setAtomsDerivatives(valuestretch,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[1]);
-          setAtomsDerivatives(valuestagger,N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframe[2]);
-           
+           // derivatives of the translations: a rigid translation of a base moves its reference point by the same amount, so the
+           // derivative (along the appropriate midframe vector, -1 for base 1 and +1 for base 2) is distributed over the rigid body by mass
+          double transWeight = INTRAPAIRSIGN*pow(-1,base+1)*AtomsMasses[base][n]/BaseMass[base];
+          setAtomsDerivatives(valueshear,N,transWeight*Pairframe[0]);
+          setAtomsDerivatives(valuestretch,N,transWeight*Pairframe[1]);
+          setAtomsDerivatives(valuestagger,N,transWeight*Pairframe[2]);
+
           N++;  // large N is the overall index in the atom list
         }
       }
+
+      // virial contribution (valid as the derivatives above carry no net force)
+      setBoxDerivativesNoPbc(valuebuckle);
+      setBoxDerivativesNoPbc(valuepropeller);
+      setBoxDerivativesNoPbc(valueopening);
+      setBoxDerivativesNoPbc(valueshear);
+      setBoxDerivativesNoPbc(valuestretch);
+      setBoxDerivativesNoPbc(valuestagger);
 
       break;
     }
@@ -1501,7 +1407,7 @@ void rbbNA::calculate(){
     case(step):{  // to be redone (simplified) from Sequence mode
       //initialize
       int pair;  // counters
-      int pairmass;
+      double pairmass;
 
       double tilt, roll, twist, shift, slide, rise;  // output Steps
       // information related to bases
@@ -1652,9 +1558,9 @@ void rbbNA::calculate(){
         }   
 
         for(x=0;x<3;x++){
-          DtiltDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtiltDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtiltDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
-          DrollDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DrollDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DrollDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
-          DtwistDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtwistDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtwistDPairRot[base][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DtiltDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtiltDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtiltDPairRot[pair][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DrollDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DrollDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DrollDPairRot[pair][(x+2)%3]/InertiaRedef[(x+2)%3] ;
+          DtwistDpairframe[pair][x] = Pairframes[pair][(x+2)%3]*DtwistDPairRot[pair][(x+1)%3]/InertiaRedef[(x+1)%3] - Pairframes[pair][(x+1)%3]*DtwistDPairRot[pair][(x+2)%3]/InertiaRedef[(x+2)%3] ;
         }
 
 
@@ -1662,37 +1568,37 @@ void rbbNA::calculate(){
           DtiltDatom = Vector(0,0,0);
           DrollDatom = Vector(0,0,0);
           DtwistDatom = Vector(0,0,0);
-          if(FITTED or n<3){//IF fitting was not used the output will only depend on the first three atoms in each base
-
-            for(x=0;x<3;x++){
-              DtiltDatom += DtiltDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
-              DrollDatom += DrollDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
-              DtwistDatom += DtwistDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
-            }
-              
-            // now the derivatives of atom N can be outputted
-            setAtomsDerivatives(valuetilt,N,DtiltDatom);
-            setAtomsDerivatives(valueroll,N,DrollDatom);
-            setAtomsDerivatives(valuetwist,N,DtwistDatom);
-
-          }else{
-            //If no fitting was done derivatives past n==3 give 0
-            setAtomsDerivatives(valuetilt,N,Vector(0,0,0));  
-            setAtomsDerivatives(valueroll,N,Vector(0,0,0));
-            setAtomsDerivatives(valuetwist,N,Vector(0,0,0));
+          // in step mode every atom of a pair belongs to its rigid body (all base atoms when fitted, the three given atoms per base otherwise)
+          for(x=0;x<3;x++){
+            DtiltDatom += DtiltDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
+            DrollDatom += DrollDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
+            DtwistDatom += DtwistDpairframe[pair][x]*PairRedefsPair[pair][n][x]*AtomsMassesPair[pair][n];
           }
+              
+          // now the derivatives of atom N can be outputted
+          setAtomsDerivatives(valuetilt,N,DtiltDatom);
+          setAtomsDerivatives(valueroll,N,DrollDatom);
+          setAtomsDerivatives(valuetwist,N,DtwistDatom);
 
-          // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
-           
-          setAtomsDerivatives(valueshift,N,pow(-1,pair+1)*Stepframe[0]);
-          setAtomsDerivatives(valueslide,N,pow(-1,pair+1)*Stepframe[1]);  
-          setAtomsDerivatives(valuerise,N,pow(-1,pair+1)*Stepframe[2]);
-            //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
+          // derivatives of the translations: trans = 0.5*(ref3+ref4-ref1-ref2), so a rigid translation of a base contributes -0.5 (lower pair) or
+          // +0.5 (upper pair) along the appropriate step frame vector; this is distributed over the rigid body of that base by mass
+          int stepBase = 2*pair + ((n<AtomsInBase[2*pair]) ? 0 : 1);
+          double transWeight = 0.5*pow(-1,pair+1)*AtomsMassesPair[pair][n]/BaseMass[stepBase];
+          setAtomsDerivatives(valueshift,N,transWeight*Stepframe[0]);
+          setAtomsDerivatives(valueslide,N,transWeight*Stepframe[1]);  
+          setAtomsDerivatives(valuerise,N,transWeight*Stepframe[2]);
           N++;  // large N is the overall index in the atom list
         }
 
       }
-      
+
+      // virial contribution (valid as the derivatives above carry no net force)
+      setBoxDerivativesNoPbc(valuetilt);
+      setBoxDerivativesNoPbc(valueroll);
+      setBoxDerivativesNoPbc(valuetwist);
+      setBoxDerivativesNoPbc(valueshift);
+      setBoxDerivativesNoPbc(valueslide);
+      setBoxDerivativesNoPbc(valuerise);
 
       break;
     }
@@ -1884,13 +1790,12 @@ void rbbNA::calculate(){
         
        //now the derivatives of the parameters of this step are defined for all atoms
         for(n=0;n<M;n++){//atoms before the step give derivative 0
-          setAtomsDerivatives(valuestilt[step],N,Vector(0,0,0));  
-          setAtomsDerivatives(valuesroll[step],N,Vector(0,0,0));
-          setAtomsDerivatives(valuestwist[step],N,Vector(0,0,0));
-        // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-          setAtomsDerivatives(valuesshift[step],N,Vector(0,0,0));
-          setAtomsDerivatives(valuesslide[step],N,Vector(0,0,0));
-          setAtomsDerivatives(valuesrise[step],N,Vector(0,0,0));       
+          setAtomsDerivatives(valuestilt[step],n,Vector(0,0,0));  
+          setAtomsDerivatives(valuesroll[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuestwist[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesshift[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesslide[step],n,Vector(0,0,0));
+          setAtomsDerivatives(valuesrise[step],n,Vector(0,0,0));       
         }
         
         for(base=0;base<4;base++){
@@ -1949,18 +1854,16 @@ void rbbNA::calculate(){
               setAtomsDerivatives(valuestwist[step],N,Vector(0,0,0));
             }
 
-            // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector they point along the apropriate step frame vector and as trans = refTop-refBottom with a minus for base 1 and 2 and plus for 3 and 4
-           
-            if(base<2){
-              setAtomsDerivatives(valuesshift[step],N,Stepframes[step][0]);
-              setAtomsDerivatives(valuesslide[step],N,Stepframes[step][1]);
-              setAtomsDerivatives(valuesrise[step],N,Stepframes[step][2]);
-              M++;  //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
-            }else{
-              setAtomsDerivatives(valuesshift[step],N,-1*Stepframes[step][0]);
-              setAtomsDerivatives(valuesslide[step],N,-1*Stepframes[step][1]);
-              setAtomsDerivatives(valuesrise[step],N,-1*Stepframes[step][2]);
+            // derivatives of the translations: trans = 0.5*(ref3+ref4-ref1-ref2), so a rigid translation of a base contributes -0.5 (bases 1 and 2)
+            // or +0.5 (bases 3 and 4) along the appropriate step frame vector; this is distributed over the rigid body of that base by mass
+            double transWeight = 0.0;
+            if(FITTED or n<3){
+              transWeight = ((base<2) ? -0.5 : 0.5)*AtomsMasses[2*step+base][n]/BaseMass[2*step+base];
             }
+            setAtomsDerivatives(valuesshift[step],N,transWeight*Stepframes[step][0]);
+            setAtomsDerivatives(valuesslide[step],N,transWeight*Stepframes[step][1]);
+            setAtomsDerivatives(valuesrise[step],N,transWeight*Stepframes[step][2]);
+            if(base<2){M++;}  //increase the counter keeping track of the starting atom of the next step when going over the bottom two bases
             N++;  // large N is the overall index in the atom list
           }
 
@@ -1976,6 +1879,14 @@ void rbbNA::calculate(){
           setAtomsDerivatives(valuesslide[step],n,Vector(0,0,0));
           setAtomsDerivatives(valuesrise[step],n,Vector(0,0,0));       
         }
+
+        // virial contribution (valid as the derivatives above carry no net force)
+        setBoxDerivativesNoPbc(valuestilt[step]);
+        setBoxDerivativesNoPbc(valuesroll[step]);
+        setBoxDerivativesNoPbc(valuestwist[step]);
+        setBoxDerivativesNoPbc(valuesshift[step]);
+        setBoxDerivativesNoPbc(valuesslide[step]);
+        setBoxDerivativesNoPbc(valuesrise[step]);
       
       }
 
@@ -2065,14 +1976,20 @@ void rbbNA::calculate(){
               setAtomsDerivatives(valuesopening[pair],N,Vector(0,0,0));
             }
 
-           // derivatives of the translations are calculated much simpler to be in the direction of the appropriate midframe vector
-            setAtomsDerivatives(valuesshear[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][0]);
-            setAtomsDerivatives(valuesstretch[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][1]);
-            setAtomsDerivatives(valuesstagger[pair],N,INTRAPAIRSIGN*pow(-1,base+1)*Pairframes[pair][2]);
+           // derivatives of the translations: a rigid translation of a base moves its reference point by the same amount, so the
+           // derivative (along the appropriate midframe vector, -1 for base 1 and +1 for base 2) is distributed over the rigid body by mass
+            double transWeight = 0.0;
+            if(FITTED or n<3){
+              transWeight = INTRAPAIRSIGN*pow(-1,base+1)*AtomsMasses[2*pair+base][n]/BaseMass[2*pair+base];
+            }
+            setAtomsDerivatives(valuesshear[pair],N,transWeight*Pairframes[pair][0]);
+            setAtomsDerivatives(valuesstretch[pair],N,transWeight*Pairframes[pair][1]);
+            setAtomsDerivatives(valuesstagger[pair],N,transWeight*Pairframes[pair][2]);
            
             N++;  // large N is the overall index in the atom list
           }
         }
+        M=N;  // the atoms of the next pair start after the atoms of this pair
         
         for(n=N;n<natoms;n++){//atoms after the step give derivative 0
           setAtomsDerivatives(valuesbuckle[pair],n,Vector(0,0,0));  
@@ -2084,6 +2001,14 @@ void rbbNA::calculate(){
           setAtomsDerivatives(valuesstretch[pair],n,Vector(0,0,0));
           setAtomsDerivatives(valuesstagger[pair],n,Vector(0,0,0));       
         }
+
+        // virial contribution (valid as the derivatives above carry no net force)
+        setBoxDerivativesNoPbc(valuesbuckle[pair]);
+        setBoxDerivativesNoPbc(valuespropeller[pair]);
+        setBoxDerivativesNoPbc(valuesopening[pair]);
+        setBoxDerivativesNoPbc(valuesshear[pair]);
+        setBoxDerivativesNoPbc(valuesstretch[pair]);
+        setBoxDerivativesNoPbc(valuesstagger[pair]);
        
       }
 
