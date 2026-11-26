@@ -35,6 +35,9 @@ using namespace std;
 namespace PLMD {
 namespace colvar {
 
+// unit conversion for the model base coordinates used in fit(), which are given in Angstrom
+static const double ANGSTROMTONM = 0.1;
+
 // Sign convention for the intra-base-pair parameters (buckle, propeller, opening,
 // shear, stretch, stagger). Internally the pair transformation is computed from the
 // strand-I base to the strand-II base, which is the reverse of Curves+/3DNA (Tsukuba).
@@ -661,9 +664,10 @@ void rbbNAnoder::fit(char type, vector<VectorGeneric<3>> atoms, VectorGeneric<3>
     fitAtom3[i] = R[0][i]*modelBaseCoords[2][0] + R[1][i]*modelBaseCoords[2][1] + R[2][i]*modelBaseCoords[2][2]; // rotate the model C4 or C2 (=2) base to be as close as possible to the simulation atom
   }
 
-  *fit1=(fitAtom1+MC);
-  *fit2=(fitAtom2+MC);
-  *fit3=(fitAtom3+MC);
+  // the model base coordinates are in Angstrom, positions in nm: convert the fitted offsets before placing them on the centroid
+  *fit1=(ANGSTROMTONM*fitAtom1+MC);
+  *fit2=(ANGSTROMTONM*fitAtom2+MC);
+  *fit3=(ANGSTROMTONM*fitAtom3+MC);
 
   return;
 }
@@ -1019,7 +1023,7 @@ void rbbNAnoder::calculate(){
     internal=delta(refAtoms[base][1],refAtoms[base][2]);  // get the internal bond used in frame construction
         
     Baseframes[base] = BaseFrame(glycosidic, internal);  // construct the base frame
-    BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], AtomsBases[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
+    BaseRefs[base] = RefPoint(glycosidic, Baseframes[base][2], refAtoms[base][1]); // the refference point is defined as a rotation of the glycsidic about the normal
 
 
     if((base%2) == 1){  // deal with the 3'->5', 5'->3' anti-symmetry making the tangents of opposing bases point in the same direction()
